@@ -194,13 +194,13 @@ internal static class IssuerTestHost
     private sealed record ProblemBody(string? Code);
 
     /// <summary>A public client, <c>desktop</c>, allowed the scope <paramref name="scope"/>, and that scope with itself as resource.</summary>
-    public static async Task DeclarePublicClientAsync(this WebApplication app, string clientId = "desktop", string scope = "documents", CancellationToken ct = default)
+    public static async Task DeclarePublicClientAsync(this WebApplication app, string clientId = "desktop", string scope = "documents", CancellationToken ct = default, ClientKind kind = ClientKind.Public, string redirectUri = RedirectUri)
     {
         using var services = app.Services.CreateScope();
         var catalog = services.ServiceProvider.GetRequiredService<IssuerCatalog>();
         if ((await catalog.GetScopeAsync(scope, ct)).IsFailure)
             Assert.True((await catalog.CreateScopeAsync(new ScopeDefinition(scope), ct)).IsSuccess);
-        var created = await catalog.CreateClientAsync(new ClientDefinition(clientId, Kind: ClientKind.Public, Scopes: ["email", "profile", scope], RedirectUris: [RedirectUri]), ct);
+        var created = await catalog.CreateClientAsync(new ClientDefinition(clientId, Kind: kind, Scopes: ["email", "profile", scope], RedirectUris: [redirectUri]), ct);
         Assert.True(created.IsSuccess, created.Error?.ToString());
     }
 
@@ -228,11 +228,11 @@ internal static class IssuerTestHost
         return (verifier, challenge);
     }
 
-    public static string AuthorizeUrl(string clientId, string challenge, string scope = "openid offline_access email profile documents", string state = "s1")
+    public static string AuthorizeUrl(string clientId, string challenge, string scope = "openid offline_access email profile documents", string state = "s1", string redirectUri = RedirectUri)
         => QueryHelpers.AddQueryString(IssuerEndpoints.AuthorizePath, new Dictionary<string, string?>
         {
             ["client_id"] = clientId,
-            ["redirect_uri"] = RedirectUri,
+            ["redirect_uri"] = redirectUri,
             ["response_type"] = "code",
             ["scope"] = scope,
             ["code_challenge"] = challenge,

@@ -13,6 +13,29 @@ public sealed class FlowTests
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     [Fact]
+    public async Task A_native_client_comes_back_on_any_loopback_port_and_a_browser_client_on_its_exact_address()
+    {
+        await using var app = await IssuerTestHost.Builder().StartAsync(Ct);
+        await app.DeclarePublicClientAsync("desktop", kind: ClientKind.Native, redirectUri: "http://127.0.0.1/callback", ct: Ct);
+        await app.DeclarePublicClientAsync("browser", redirectUri: "http://127.0.0.1/callback", ct: Ct);
+        var (_, challenge) = IssuerTestHost.Pkce();
+        using var jane = app.ClientAs("jane");
+
+        // The native application listens on whatever port was free: the issuer ignores it (RFC 8252 § 7.3).
+        var native = await jane.GetAsync(IssuerTestHost.AuthorizeUrl("desktop", challenge, redirectUri: "http://127.0.0.1:54321/callback"), Ct);
+        Assert.Equal(HttpStatusCode.Redirect, native.StatusCode);
+        Assert.StartsWith("http://127.0.0.1:54321/callback?code=", native.Headers.Location!.ToString());
+
+        // A browser application is sent back to its exact address only.
+        var browser = await jane.GetAsync(IssuerTestHost.AuthorizeUrl("browser", challenge, redirectUri: "http://127.0.0.1:54321/callback"), Ct);
+        Assert.Equal(HttpStatusCode.BadRequest, browser.StatusCode);
+
+        using var services = app.Services.CreateScope();
+        var client = await services.ServiceProvider.GetRequiredService<IssuerCatalog>().GetClientAsync("desktop", Ct);
+        Assert.Equal(ClientKind.Native, client.Value.Kind);
+    }
+
+    [Fact]
     public async Task A_public_client_gets_its_tokens_by_code_and_PKCE_and_refreshes_them()
     {
         await using var app = await IssuerTestHost.Builder().StartAsync(Ct);

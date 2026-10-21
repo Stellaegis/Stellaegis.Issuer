@@ -74,6 +74,9 @@ internal sealed class SessionsModel(
             if (id is null)
                 continue;
 
+            // A session is what an application holds: its access and refresh tokens still valid. An authorization
+            // whose code was never exchanged, or whose every token expired, is no session to show — nothing is
+            // signed in on the person's behalf.
             var active = 0;
             DateTimeOffset? until = null;
             await foreach (var token in tokens.FindByAuthorizationIdAsync(id, cancellationToken))
@@ -83,10 +86,15 @@ internal sealed class SessionsModel(
                 var expires = await tokens.GetExpirationDateAsync(token, cancellationToken);
                 if (expires is not null && expires <= now)
                     continue;
+                var type = await tokens.GetTypeAsync(token, cancellationToken);
+                if (type != TokenTypeIdentifiers.AccessToken && type != TokenTypeIdentifiers.RefreshToken)
+                    continue;
                 active++;
-                if (await tokens.GetTypeAsync(token, cancellationToken) == TokenTypeIdentifiers.RefreshToken && (until is null || expires > until))
+                if (type == TokenTypeIdentifiers.RefreshToken && (until is null || expires > until))
                     until = expires;
             }
+            if (active == 0)
+                continue;
 
             var applicationId = await authorizations.GetApplicationIdAsync(authorization, cancellationToken);
             var application = applicationId is null ? null : await applications.FindByIdAsync(applicationId, cancellationToken);

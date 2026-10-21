@@ -6,21 +6,32 @@ using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace Stellaegis.Issuer;
 
-/// <summary>What a client is: public, a browser or a native application that holds no secret and proves itself by PKCE; or confidential, a service that holds a secret. On the wire, its name.</summary>
+/// <summary>
+/// What a client is: public, a browser application that holds no secret and proves itself by PKCE; native, a
+/// desktop or mobile application, public too, which comes back on a loopback address whose port the issuer
+/// ignores (RFC 8252); or confidential, a service that holds a secret. On the wire, its name.
+/// </summary>
 [JsonConverter(typeof(JsonStringEnumConverter<ClientKind>))]
 public enum ClientKind
 {
-    /// <summary>A browser or a native application: authorization code with PKCE, refresh tokens, no secret.</summary>
+    /// <summary>A browser application: authorization code with PKCE, refresh tokens, no secret, its redirect URIs matched exactly.</summary>
     Public,
 
     /// <summary>A service: client credentials, a secret.</summary>
     Confidential,
+
+    /// <summary>
+    /// A desktop or mobile application: authorization code with PKCE, refresh tokens, no secret — and a redirect URI
+    /// on the loopback, <c>http://127.0.0.1/callback</c>, matched whatever the port the application listens on, so
+    /// that it takes any free port (RFC 8252 § 7.3).
+    /// </summary>
+    Native,
 }
 
 /// <summary>A client as the catalog shows it: nothing secret.</summary>
 /// <param name="ClientId">Its id.</param>
 /// <param name="DisplayName">Its display name.</param>
-/// <param name="Kind">Whether it is public or confidential.</param>
+/// <param name="Kind">Whether it is public, native or confidential.</param>
 /// <param name="Scopes">The scopes it may request, besides <c>openid</c> and <c>offline_access</c>.</param>
 /// <param name="RedirectUris">Where a public client is sent back with its code.</param>
 /// <param name="PostLogoutRedirectUris">Where a public client is sent back after a logout.</param>
@@ -39,9 +50,9 @@ public sealed record OidcClient(
 /// </summary>
 /// <param name="ClientId">Its id: 1 to 100 letters, digits, <c>_</c>, <c>-</c> or <c>.</c>.</param>
 /// <param name="DisplayName">Its display name; the id unless given.</param>
-/// <param name="Kind">Whether it is public or confidential.</param>
+/// <param name="Kind">Whether it is public, native or confidential.</param>
 /// <param name="Scopes">The scopes it may request, besides <c>openid</c> and <c>offline_access</c>.</param>
-/// <param name="RedirectUris">Where a public client is sent back with its code; absolute URIs.</param>
+/// <param name="RedirectUris">Where a public client is sent back with its code; absolute URIs — for a native client, a loopback address whose port is ignored.</param>
 /// <param name="PostLogoutRedirectUris">Where a public client is sent back after a logout; absolute URIs.</param>
 /// <param name="Secret">The secret of a confidential client; generated and returned once when left empty.</param>
 public sealed record ClientDefinition(
@@ -259,7 +270,7 @@ public sealed class IssuerCatalog(IOpenIddictApplicationManager applications, IO
             if (!Uri.TryCreate(uri, UriKind.Absolute, out _))
                 return IssuerErrors.ClientInvalid($"'{uri}' is not an absolute URI.");
         }
-        if (definition.Kind == ClientKind.Public && definition.Secret is not null)
+        if (definition.Kind != ClientKind.Confidential && definition.Secret is not null)
             return IssuerErrors.ClientInvalid("A public client holds no secret.");
         if (definition.Secret is not null && string.IsNullOrWhiteSpace(definition.Secret))
             return IssuerErrors.ClientInvalid("The secret is empty.");
@@ -286,7 +297,8 @@ public sealed class IssuerCatalog(IOpenIddictApplicationManager applications, IO
         {
             ClientId = definition.ClientId,
             DisplayName = string.IsNullOrWhiteSpace(definition.DisplayName) ? definition.ClientId : definition.DisplayName,
-            ClientType = definition.Kind == ClientKind.Public ? ClientTypes.Public : ClientTypes.Confidential,
+            ClientType = definition.Kind == ClientKind.Confidential ? ClientTypes.Confidential : ClientTypes.Public,
+            ApplicationType = definition.Kind == ClientKind.Native ? ApplicationTypes.Native : ApplicationTypes.Web,
             ConsentType = ConsentTypes.Implicit,
         };
         string? generated = null;
@@ -335,10 +347,13 @@ public sealed class IssuerCatalog(IOpenIddictApplicationManager applications, IO
     private async Task<OidcClient> ToClientAsync(object application, CancellationToken cancellationToken)
     {
         var permissions = await applications.GetPermissionsAsync(application, cancellationToken).ConfigureAwait(false);
+        var kind = await applications.GetClientTypeAsync(application, cancellationToken).ConfigureAwait(false) != ClientTypes.Public ? ClientKind.Confidential
+            : await applications.GetApplicationTypeAsync(application, cancellationToken).ConfigureAwait(false) == ApplicationTypes.Native ? ClientKind.Native
+            : ClientKind.Public;
         return new OidcClient(
             (await applications.GetClientIdAsync(application, cancellationToken).ConfigureAwait(false))!,
             await applications.GetDisplayNameAsync(application, cancellationToken).ConfigureAwait(false) ?? "",
-            await applications.GetClientTypeAsync(application, cancellationToken).ConfigureAwait(false) == ClientTypes.Public ? ClientKind.Public : ClientKind.Confidential,
+            kind,
             permissions.Where(permission => permission.StartsWith(Permissions.Prefixes.Scope, StringComparison.Ordinal)).Select(permission => permission[Permissions.Prefixes.Scope.Length..]).Order(StringComparer.Ordinal).ToList(),
             (await applications.GetRedirectUrisAsync(application, cancellationToken).ConfigureAwait(false)).ToList(),
             (await applications.GetPostLogoutRedirectUrisAsync(application, cancellationToken).ConfigureAwait(false)).ToList());
