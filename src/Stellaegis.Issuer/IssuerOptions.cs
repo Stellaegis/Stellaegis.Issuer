@@ -1,3 +1,4 @@
+using Stellaegis.Issuer.Client;
 using Stellaegis.Primitives.Hosting;
 
 namespace Stellaegis.Issuer;
@@ -134,32 +135,6 @@ public sealed class IssuerCertificatesOptions : IValidatableOptions
             return $"{nameof(Signing)}: {signing}";
         if (Encryption.FindError() is { } encryption)
             return $"{nameof(Encryption)}: {encryption}";
-        return null;
-    }
-}
-
-/// <summary>One certificate: a PKCS #12 file and its password, or a thumbprint in the current user's store.</summary>
-public sealed class IssuerCertificateOptions : IValidatableOptions
-{
-    /// <summary>The path of the PKCS #12 file.</summary>
-    public string? Path { get; set; }
-
-    /// <summary>The password of the PKCS #12 file, from a secret store.</summary>
-    public string? Password { get; set; }
-
-    /// <summary>The thumbprint of the certificate in the current user's personal store, instead of a file.</summary>
-    public string? Thumbprint { get; set; }
-
-    /// <summary>Whether the options name a certificate at all.</summary>
-    public bool IsSet => !string.IsNullOrWhiteSpace(Path) || !string.IsNullOrWhiteSpace(Thumbprint);
-
-    /// <inheritdoc/>
-    public string? FindError()
-    {
-        if (!string.IsNullOrWhiteSpace(Path) && !string.IsNullOrWhiteSpace(Thumbprint))
-            return $"{nameof(Path)} and {nameof(Thumbprint)} are exclusive: one certificate comes from a file or from the store.";
-        if (string.IsNullOrWhiteSpace(Path) && Password is not null)
-            return $"{nameof(Password)} goes with {nameof(Path)}.";
         return null;
     }
 }

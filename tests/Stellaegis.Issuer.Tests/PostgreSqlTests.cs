@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging;
 using Npgsql;
 using OpenIddict.EntityFrameworkCore.Models;
 using Stellaegis.Issuer.PostgreSQL;
+using Stellaegis.Issuer.Client;
 using Stellaegis.Primitives;
 using Stellaegis.Primitives.AspNetCore;
 using Stellaegis.Primitives.Data;

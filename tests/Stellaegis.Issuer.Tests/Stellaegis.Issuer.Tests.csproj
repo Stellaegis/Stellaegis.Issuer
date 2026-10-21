@@ -18,6 +18,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Stellaegis.Issuer\Stellaegis.Issuer.csproj" />
     <ProjectReference Include="..\..\src\Stellaegis.Issuer.PostgreSQL\Stellaegis.Issuer.PostgreSQL.csproj" />
+    <ProjectReference Include="..\..\src\Stellaegis.Issuer.Client\Stellaegis.Issuer.Client.csproj" />
   </ItemGroup>
 
   <ItemGroup>

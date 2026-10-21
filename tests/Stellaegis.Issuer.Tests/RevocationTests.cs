@@ -2,6 +2,7 @@ using System.Net;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
+using Stellaegis.Issuer.Client;
 using Stellaegis.Primitives.AspNetCore;
 
 namespace Stellaegis.Issuer.Tests;

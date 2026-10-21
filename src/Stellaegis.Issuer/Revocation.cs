@@ -1,12 +1,10 @@
-using System.Collections.Concurrent;
-using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using OpenIddict.Abstractions;
 using OpenIddict.EntityFrameworkCore.Models;
+using Stellaegis.Issuer.Client;
 using Stellaegis.Primitives;
-using Stellaegis.Primitives.AspNetCore;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace Stellaegis.Issuer;
@@ -14,7 +12,7 @@ namespace Stellaegis.Issuer;
 /// <summary>
 /// Revokes what the issuer issued, at the store, and announces each access token revoked before its expiration
 /// as a <see cref="TokenRevokedEvent"/> — the store is the durable half, which the readings of
-/// <see cref="IRevokedTokensSource"/> re-sync; the event is the shortcut. The host calls it from its subscription
+/// <see cref="IRevokedTokensSource"/> (<c>Stellaegis.Issuer.Client</c>) re-sync; the event is the shortcut. The host calls it from its subscription
 /// to the <c>UserBlocked</c> event of the accounts, an administrator from the <c>tokens.revoke</c> route, the person
 /// from their sessions page; the caller owns the decision, this only performs it.
 /// </summary>
@@ -121,21 +119,6 @@ internal sealed class TokenRevoker(
     }
 }
 
-/// <summary>An access token revoked before its expiration, as a resource server reads it.</summary>
-/// <param name="TokenId">The id of the token, which its <c>oi_tkn_id</c> claim carries.</param>
-/// <param name="ExpiresAt">When the token expires anyway.</param>
-public sealed record RevokedToken(string TokenId, DateTimeOffset ExpiresAt);
-
-/// <summary>
-/// Where a resource server reads the access tokens revoked before their expiration: the token store, on a host
-/// that holds the issuer; the issuer's route over HTTP, on a resource server apart (<c>Stellaegis.Issuer.Client</c>).
-/// </summary>
-public interface IRevokedTokensSource
-{
-    /// <summary>The access tokens revoked and not yet expired.</summary>
-    Task<IReadOnlyCollection<RevokedToken>> GetRevokedTokensAsync(CancellationToken cancellationToken = default);
-}
-
 /// <summary>The source over the token store, for a host that holds the issuer.</summary>
 internal sealed class LocalRevokedTokensSource(IssuerDbContext db, TimeProvider clock) : IRevokedTokensSource
 {
@@ -155,59 +138,4 @@ internal sealed class LocalRevokedTokensSource(IssuerDbContext db, TimeProvider 
             .Select(row => new RevokedToken(row.Id!, new DateTimeOffset(DateTime.SpecifyKind(row.ExpirationDate!.Value, DateTimeKind.Utc))))
             .ToList();
     }
-}
-
-/// <summary>
-/// The access tokens revoked before their expiration, as a resource server keeps them in memory to refuse them on
-/// every request without a round trip: the <see cref="IActorAdmission"/> of the issuer, registered beside the
-/// admissions of the other modules by <c>AddStellaegisIssuerAdmission()</c>. Filled by the host, which calls
-/// <see cref="Revoke"/> from its subscription to <see cref="TokenRevokedEvent"/>, and by the issuer itself when
-/// both are in one process; <see cref="Replace"/> is what a reading of <see cref="IRevokedTokensSource"/> does. An
-/// expired token leaves the set by itself.
-/// </summary>
-public sealed class RevokedTokens(TimeProvider clock) : IActorAdmission
-{
-    private volatile ConcurrentDictionary<string, DateTimeOffset> _revoked = new(StringComparer.Ordinal);
-
-    /// <summary>Whether the token — the <c>oi_tkn_id</c> claim — is revoked and not yet expired.</summary>
-    public bool IsRevoked(string tokenId)
-        => !string.IsNullOrWhiteSpace(tokenId) && _revoked.TryGetValue(tokenId, out var expiresAt) && expiresAt > clock.GetUtcNow();
-
-    /// <summary>Refuses the token from now on, until it expires.</summary>
-    public void Revoke(string tokenId, DateTimeOffset expiresAt)
-    {
-        Guard.NotWhiteSpace(tokenId);
-        if (expiresAt > clock.GetUtcNow())
-            _revoked[tokenId] = expiresAt;
-    }
-
-    /// <summary>Replaces every token by <paramref name="tokens"/>, in one move: what a reading of the source does.</summary>
-    public void Replace(IEnumerable<RevokedToken> tokens)
-    {
-        Guard.NotNull(tokens);
-        var now = clock.GetUtcNow();
-        var replacement = new ConcurrentDictionary<string, DateTimeOffset>(StringComparer.Ordinal);
-        foreach (var token in tokens)
-        {
-            if (!string.IsNullOrWhiteSpace(token.TokenId) && token.ExpiresAt > now)
-                replacement[token.TokenId] = token.ExpiresAt;
-        }
-        _revoked = replacement;
-    }
-
-    /// <summary>The tokens revoked and not yet expired, as a snapshot.</summary>
-    public IReadOnlyCollection<RevokedToken> Tokens
-    {
-        get
-        {
-            var now = clock.GetUtcNow();
-            return _revoked.Where(pair => pair.Value > now).Select(pair => new RevokedToken(pair.Key, pair.Value)).ToList();
-        }
-    }
-
-    /// <summary>Refuses, with <see cref="IssuerErrors.TokenRevoked"/>, a principal whose token is revoked.</summary>
-    public ValueTask<Result> AdmitAsync(ClaimsPrincipal principal, CancellationToken cancellationToken)
-        => ValueTask.FromResult(Guard.NotNull(principal).FindFirst(Claims.Private.TokenId)?.Value is { } tokenId && IsRevoked(tokenId)
-            ? Result.Failure(IssuerErrors.TokenRevoked)
-            : Result.Success());
 }

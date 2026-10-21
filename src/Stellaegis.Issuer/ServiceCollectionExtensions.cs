@@ -1,4 +1,3 @@
-using System.Security.Cryptography.X509Certificates;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -6,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using OpenIddict.Abstractions;
+using Stellaegis.Issuer.Client;
 using Stellaegis.Primitives;
 using Stellaegis.Primitives.AspNetCore;
 using Stellaegis.Primitives.Hosting;
@@ -19,10 +19,12 @@ public static class ServiceCollectionExtensions
     /// Registers the issuer: OpenIddict as the server — authorization code with PKCE, client credentials, refresh
     /// tokens, the routes under <c>/connect</c> —, its stores on <see cref="IssuerDbContext"/> over the provider
     /// <paramref name="configureDatabase"/> names, the revocation, the provisioning of clients, the catalog of
-    /// clients and scopes, its options bound from <paramref name="sectionName"/> and validated when the host
-    /// starts; and declares the module to the application. The host maps the protocol routes with
-    /// <see cref="IssuerEndpoints.MapStellaegisIssuer"/>. <c>Stellaegis.Issuer.PostgreSQL</c> calls this with its
-    /// provider and declares the database.
+    /// clients and scopes, the local source of the revoked tokens, its options bound from
+    /// <paramref name="sectionName"/> and validated when the host starts; and declares the module to the
+    /// application. The host maps the protocol routes with <see cref="IssuerEndpoints.MapStellaegisIssuer"/>, the
+    /// administration routes with <see cref="IssuerAdminEndpoints.MapIssuerAdminEndpoints"/>, and registers the
+    /// admission of the revoked tokens with <c>AddStellaegisIssuerAdmission()</c> of <c>Stellaegis.Issuer.Client</c>.
+    /// <c>Stellaegis.Issuer.PostgreSQL</c> calls this with its provider and declares the database.
     /// </summary>
     /// <param name="services">The services of the host.</param>
     /// <param name="configuration">The configuration the options are bound from.</param>
@@ -51,32 +53,6 @@ public static class ServiceCollectionExtensions
         configure(options);
         services.AddStellaegisOptions(configure);
         return services.AddIssuer(options, configureDatabase);
-    }
-
-    /// <summary>
-    /// Registers the admission of the revoked tokens, <see cref="RevokedTokens"/>, as one of the admissions the
-    /// host consults — beside the blocked accounts of Stellaegis.Identity —, and the source it is read from on a
-    /// host that holds the issuer, <see cref="IRevokedTokensSource"/> over the token store. The host enables the
-    /// question on its pipeline with <c>UseStellaegisActorAdmission()</c> of Primitives, and connects its bus to
-    /// <see cref="RevokedTokens"/> so that a revocation from another host applies without waiting for the next
-    /// reading. On a resource server apart, <c>Stellaegis.Issuer.Client</c> registers the HTTP source instead.
-    /// </summary>
-    public static IServiceCollection AddStellaegisIssuerAdmission(this IServiceCollection services)
-    {
-        Guard.NotNull(services);
-        services.TryAddSingleton<RevokedTokens>();
-        services.TryAddSingleton(TimeProvider.System);
-        if (!services.Any(descriptor => descriptor.ServiceType == typeof(IssuerAdmissionRegistered)))
-        {
-            services.AddSingleton(IssuerAdmissionRegistered.Instance);
-            services.AddStellaegisActorAdmission(provider => provider.GetRequiredService<RevokedTokens>());
-        }
-        return services;
-    }
-
-    private sealed class IssuerAdmissionRegistered
-    {
-        public static readonly IssuerAdmissionRegistered Instance = new();
     }
 
     private static IServiceCollection AddIssuer(this IServiceCollection services, IssuerOptions options, Action<DbContextOptionsBuilder> configureDatabase)
@@ -133,9 +109,9 @@ public static class ServiceCollectionExtensions
                 else
                 {
                     if (certificates.Signing.IsSet)
-                        server.AddSigningCertificate(Load(certificates.Signing));
+                        server.AddSigningCertificate(certificates.Signing.Load());
                     if (certificates.Encryption.IsSet)
-                        server.AddEncryptionCertificate(Load(certificates.Encryption));
+                        server.AddEncryptionCertificate(certificates.Encryption.Load());
                 }
 
                 server.AddEventHandler(ClientCredentialsTokenHandler.Descriptor);
@@ -153,19 +129,6 @@ public static class ServiceCollectionExtensions
         services.TryAddScoped<IOidcClientProvisioner, OpenIddictClientProvisioner>();
         services.TryAddScoped<IssuerCatalog>();
         return services;
-    }
-
-    private static X509Certificate2 Load(IssuerCertificateOptions certificate)
-    {
-        if (!string.IsNullOrWhiteSpace(certificate.Path))
-            return X509CertificateLoader.LoadPkcs12FromFile(certificate.Path, certificate.Password);
-
-        using var store = new X509Store(StoreName.My, StoreLocation.CurrentUser);
-        store.Open(OpenFlags.ReadOnly);
-        var found = store.Certificates.Find(X509FindType.FindByThumbprint, certificate.Thumbprint!, validOnly: false);
-        return found.Count > 0
-            ? found[0]
-            : throw new InvalidOperationException($"No certificate with the thumbprint {certificate.Thumbprint} in the current user's personal store.");
     }
 
     /// <summary>

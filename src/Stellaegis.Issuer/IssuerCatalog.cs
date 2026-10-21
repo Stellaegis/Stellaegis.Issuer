@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Options;
 using OpenIddict.Abstractions;
 using Stellaegis.Primitives;
@@ -5,7 +6,8 @@ using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace Stellaegis.Issuer;
 
-/// <summary>What a client is: public, a browser or a native application that holds no secret and proves itself by PKCE; or confidential, a service that holds a secret.</summary>
+/// <summary>What a client is: public, a browser or a native application that holds no secret and proves itself by PKCE; or confidential, a service that holds a secret. On the wire, its name.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<ClientKind>))]
 public enum ClientKind
 {
     /// <summary>A browser or a native application: authorization code with PKCE, refresh tokens, no secret.</summary>

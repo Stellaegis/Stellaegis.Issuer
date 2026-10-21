@@ -15,6 +15,7 @@
     <PackageReference Include="OpenIddict.AspNetCore" />
     <PackageReference Include="OpenIddict.EntityFrameworkCore" />
     <PackageReference Include="EFCore.NamingConventions" />
+    <ProjectReference Include="..\Stellaegis.Issuer.Client\Stellaegis.Issuer.Client.csproj" />
     <InternalsVisibleTo Include="Stellaegis.Issuer.Tests" />
   </ItemGroup>
 

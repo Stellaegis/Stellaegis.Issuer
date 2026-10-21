@@ -9,8 +9,8 @@ namespace Stellaegis.Issuer;
 /// </summary>
 public static class IssuerErrors
 {
-    /// <summary>The code of <see cref="TokenRevoked"/>: the token the principal carries was revoked.</summary>
-    public const string TokenRevokedCode = "Token.Revoked";
+    /// <summary>The code of <see cref="TokenRevoked"/>: the token the principal carries was revoked — the admission of <c>Stellaegis.Issuer.Client</c>.</summary>
+    public const string TokenRevokedCode = Client.IssuerClientErrors.TokenRevokedCode;
 
     /// <summary>The code of <see cref="TokenNotFound"/>: no token with that id.</summary>
     public const string TokenNotFoundCode = "Token.NotFound";
@@ -36,9 +36,8 @@ public static class IssuerErrors
     /// <summary>The code of <see cref="ScopeInvalid"/>: the scope's definition does not hold.</summary>
     public const string ScopeInvalidCode = "Scope.Invalid";
 
-    /// <summary>The token the principal carries was revoked.</summary>
-    public static Error TokenRevoked { get; } =
-        Error.Unauthorized(TokenRevokedCode, "The token was revoked.");
+    /// <summary>The token the principal carries was revoked: what <see cref="Client.RevokedTokens"/> refuses with.</summary>
+    public static Error TokenRevoked => Client.IssuerClientErrors.TokenRevoked;
 
     /// <summary>No token with that id.</summary>
     public static Error TokenNotFound { get; } =
