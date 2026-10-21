@@ -5,6 +5,10 @@
     <Project Path="src/Stellaegis.Issuer.Server/Stellaegis.Issuer.Server.csproj" />
     <Project Path="src/Stellaegis.Issuer/Stellaegis.Issuer.csproj" />
   </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/Stellaegis.Issuer.Sample.Identity/Stellaegis.Issuer.Sample.Identity.csproj" />
+    <Project Path="samples/Stellaegis.Issuer.Sample.Inventory/Stellaegis.Issuer.Sample.Inventory.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Stellaegis.Issuer.Tests/Stellaegis.Issuer.Tests.csproj" />
     <Project Path="tests/Stellaegis.Issuer.Tests.HostPages/Stellaegis.Issuer.Tests.HostPages.csproj" />

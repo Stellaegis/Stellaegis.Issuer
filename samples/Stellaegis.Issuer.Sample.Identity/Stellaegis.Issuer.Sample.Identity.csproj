@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!-- The example host that holds the accounts and the issuer: an enterprise application — one compartment, the
+       company itself — whose people sign in on the pages of Stellaegis.Identity, and whose issuer turns them into
+       tokens for a native client and for the services apart. Not a package, never packed. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Stellaegis.Issuer.Sample.Identity</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <UserSecretsId>stellaegis-issuer-sample-identity</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Stellaegis.Issuer\Stellaegis.Issuer.csproj" />
+    <ProjectReference Include="..\..\src\Stellaegis.Issuer.PostgreSQL\Stellaegis.Issuer.PostgreSQL.csproj" />
+    <ProjectReference Include="..\..\src\Stellaegis.Issuer.Client\Stellaegis.Issuer.Client.csproj" />
+    <ProjectReference Include="..\..\src\Stellaegis.Issuer.Server\Stellaegis.Issuer.Server.csproj" />
+    <!-- The accounts come as packages: the issuer references no Identity, the host composes the two. -->
+    <PackageReference Include="Stellaegis.Identity" />
+    <PackageReference Include="Stellaegis.Identity.PostgreSQL" />
+    <PackageReference Include="Stellaegis.Identity.AspNetCore" />
+    <PackageReference Include="Stellaegis.Identity.Server" />
+    <PackageReference Include="Npgsql" />
+  </ItemGroup>
+
+</Project>

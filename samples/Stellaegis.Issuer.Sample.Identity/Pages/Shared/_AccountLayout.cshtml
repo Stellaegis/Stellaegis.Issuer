@@ -1,0 +1,64 @@
+@*
+    The account layout of the host, which replaces the one of Stellaegis.Identity.Server at the same path: the
+    same navigation, with one entry more — the sessions page of the issuer, which the accounts do not know. The
+    texts are read from the resources of the package, so that the host adds its link and nothing else.
+*@
+@using System.Security.Claims
+@{
+    Layout = "_Layout";
+    var o = PagesOptions.Value;
+    var path = Context.Request.Path.Value ?? "";
+    Func<string, string> activeIf = p =>
+        (p == "/account" ? path.Equals(p, StringComparison.OrdinalIgnoreCase) : path.StartsWith(p, StringComparison.OrdinalIgnoreCase)) ? " active" : "";
+    var email = User.FindFirstValue("email") ?? User.FindFirstValue(ClaimTypes.Email) ?? "";
+}
+<div class="account-layout">
+    <header class="account-topbar">
+        <div class="account-topbar-brand">
+            @if (!string.IsNullOrEmpty(o.LogoPath))
+            {
+                <img class="account-topbar-logo" src="@o.LogoPath" alt="" />
+            }
+            <span class="account-topbar-name">@o.ApplicationName</span>
+            <span class="account-topbar-sub">@L["Account.Title"]</span>
+        </div>
+        <div class="account-topbar-user">@email</div>
+    </header>
+    <div class="account-body">
+        <nav class="account-sidebar" aria-label="@L["Account.Title"]">
+            <div class="account-nav-group">
+                <div class="account-nav-group-title">@L["Account.Nav.Profile"]</div>
+                <a href="/account" class="account-nav-item@(activeIf("/account"))">@L["Account.Nav.Overview"]</a>
+                <a href="/account/password" class="account-nav-item@(activeIf("/account/password"))">@L["Account.Nav.Password"]</a>
+                <a href="/account/email" class="account-nav-item@(activeIf("/account/email"))">@L["Account.Nav.Email"]</a>
+            </div>
+            <div class="account-nav-group">
+                <div class="account-nav-group-title">@L["Account.Nav.Security"]</div>
+                <a href="/account/security" class="account-nav-item@(activeIf("/account/security"))">@L["Account.Nav.Logins"]</a>
+                <a href="/account/mfa" class="account-nav-item@(activeIf("/account/mfa"))">@L["Account.Nav.Mfa"]</a>
+                <a href="/account/sessions" class="account-nav-item@(activeIf("/account/sessions"))">Sessions</a>
+            </div>
+            <div class="account-nav-group">
+                <div class="account-nav-group-title">@L["Account.Nav.Account"]</div>
+                <a href="/account/delete" class="account-nav-item danger@(activeIf("/account/delete"))">@L["Account.Nav.Delete"]</a>
+            </div>
+            <div class="account-sidebar-footer">
+                <form method="post" action="/account?handler=Logout">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="account-logout-btn">@L["Account.Logout"]</button>
+                </form>
+            </div>
+        </nav>
+        <main class="account-content" role="main">
+            <h1 class="account-page-title">@ViewData["Title"]</h1>
+            @RenderBody()
+        </main>
+    </div>
+</div>
+
+@section Styles {
+    @await RenderSectionAsync("Styles", required: false)
+}
+@section Scripts {
+    @await RenderSectionAsync("Scripts", required: false)
+}

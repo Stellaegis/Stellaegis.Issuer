@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "Stellaegis.Issuer.Sample.Inventory": {
+      "commandName": "Project",
+      "launchBrowser": false,
+      "applicationUrl": "https://localhost:7112",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}

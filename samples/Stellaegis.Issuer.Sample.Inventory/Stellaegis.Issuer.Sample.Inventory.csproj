@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!-- The example host apart from the issuer: a resource server that accepts the tokens the issuer issued,
+       refuses the revoked ones, and speaks to the issuer with its own credentials. Not a package, never packed. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Stellaegis.Issuer.Sample.Inventory</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <UserSecretsId>stellaegis-issuer-sample-inventory</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Only the client package: no OpenIddict, no accounts, no store on this host. -->
+    <ProjectReference Include="..\..\src\Stellaegis.Issuer.Client\Stellaegis.Issuer.Client.csproj" />
+  </ItemGroup>
+
+</Project>
