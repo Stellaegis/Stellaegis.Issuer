@@ -1,0 +1,53 @@
+@page "/account/sessions"
+@model SessionsModel
+@inject Microsoft.AspNetCore.Mvc.ViewEngines.ICompositeViewEngine ViewEngine
+@{
+    ViewData["Title"] = T["Sessions.Title"];
+    // Among the account pages when the host has an account layout — its own, or the one of Stellaegis.Identity.Server —, alone otherwise.
+    Layout = ViewEngine.FindView(ViewContext, "_AccountLayout", isMainPage: false).Success ? "_AccountLayout" : "_IssuerLayout";
+}
+
+<p class="auth-help">@T["Sessions.Help"]</p>
+
+@if (TempData["Notice"] is string notice)
+{
+    <div class="auth-success" role="status">@T[notice]</div>
+}
+@if (TempData["Error"] is string error)
+{
+    <div class="auth-errors" role="alert">@T[error]</div>
+}
+
+@if (Model.Sessions.Count == 0)
+{
+    <p class="auth-help auth-small">@T["Sessions.None"]</p>
+}
+else
+{
+    <div class="account-events">
+        @foreach (var session in Model.Sessions)
+        {
+            <div class="account-event ok">
+                <div class="account-event-head">
+                    <span class="account-event-label">@session.ClientName</span>
+                    <time datetime="@session.CreatedAt.ToString("o")">@T.Format("Sessions.Since", session.CreatedAt.ToLocalTime().ToString("g"))</time>
+                </div>
+                <div class="account-event-meta">
+                    @if (session.ExpiresAt is { } expires)
+                    {
+                        <span>@T.Format("Sessions.Until", expires.ToLocalTime().ToString("g"))</span>
+                    }
+                    <span>@T.Format("Sessions.Tokens", session.ActiveTokens)</span>
+                    <form method="post" asp-page-handler="Revoke">
+                        <input type="hidden" name="authorizationId" value="@session.AuthorizationId" />
+                        <button type="submit" class="auth-link">@T["Sessions.Revoke"]</button>
+                    </form>
+                </div>
+            </div>
+        }
+    </div>
+
+    <form method="post" asp-page-handler="RevokeAll" class="sessions-revoke-all" onsubmit="return confirm(@Html.Raw(System.Text.Json.JsonSerializer.Serialize(T["Sessions.RevokeAllConfirm"])))">
+        <button type="submit" class="auth-btn auth-btn-danger">@T["Sessions.RevokeAll"]</button>
+    </form>
+}

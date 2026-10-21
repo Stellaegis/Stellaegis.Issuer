@@ -1,0 +1,32 @@
+@*
+    The layout of the page when no account layout is there to hold it — a host without the pages of
+    Stellaegis.Identity: the document, its stylesheet, the name of the application, the page. A host that has an
+    _AccountLayout never sees this one.
+*@
+@{
+    var o = IssuerPages.Value;
+}
+<!DOCTYPE html>
+<html lang="@System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <title>@ViewData["Title"] · @o.ApplicationName</title>
+    <link rel="stylesheet" href="@o.StylesheetPath" />
+    @await RenderSectionAsync("Styles", required: false)
+</head>
+<body class="stellaegis-issuer">
+    <div class="issuer-layout">
+        <header class="issuer-topbar">
+            <span class="issuer-topbar-name">@o.ApplicationName</span>
+            <span class="issuer-topbar-sub">@ViewData["Title"]</span>
+        </header>
+        <main class="issuer-content" role="main">
+            <h1 class="issuer-page-title">@ViewData["Title"]</h1>
+            @RenderBody()
+        </main>
+    </div>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

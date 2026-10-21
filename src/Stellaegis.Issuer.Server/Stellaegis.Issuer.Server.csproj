@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Stellaegis.Issuer.Server</RootNamespace>
+    <PackageId>Stellaegis.Issuer.Server</PackageId>
+    <Description>The page a person sees and ends the sessions the issuer opened for them — the applications signed in on their behalf, each revocable, all at once —, as a Razor class library any ASP.NET Core host mounts beside the pages of Stellaegis.Identity, whose account layout it takes when the host has it. Texts in English and French, a stylesheet on CSS variables, the page replaceable by the host.</Description>
+    <PackageTags>stellaegis;issuer;oidc;sessions;razor;pages</PackageTags>
+    <AddRazorSupportForMvc>true</AddRazorSupportForMvc>
+    <StaticWebAssetBasePath>_content/Stellaegis.Issuer.Server</StaticWebAssetBasePath>
+    <NeutralLanguage>en</NeutralLanguage>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Stellaegis.Issuer\Stellaegis.Issuer.csproj" />
+    <PackageReference Include="Stellaegis.Primitives.AspNetCore" />
+    <InternalsVisibleTo Include="Stellaegis.Issuer.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+</Project>

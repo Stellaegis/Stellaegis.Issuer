@@ -1,0 +1,75 @@
+/* Stellaegis.Issuer.Server — the sessions page, when no account layout of the host holds it.
+
+   The variables are those of the pages of Stellaegis.Identity (--si-*): one stylesheet of the host restyles both.
+   A host names its own in Stellaegis:Issuer:Pages:StylesheetPath, or serves it at the same path as this file,
+   which wins over the package's. When the page renders inside the account layout of Stellaegis.Identity.Server,
+   its stylesheet applies and this one is not loaded. */
+
+.stellaegis-issuer {
+    --si-bg: #f6f7f9;
+    --si-surface: #ffffff;
+    --si-border: #d9dde3;
+    --si-text: #1f2328;
+    --si-muted: #636c76;
+    --si-accent: #2f5f8f;
+    --si-accent-hover: #244b72;
+    --si-accent-text: #ffffff;
+    --si-danger: #a4262c;
+    --si-danger-bg: #fdf3f3;
+    --si-success: #1f6f3a;
+    --si-success-bg: #eef8f1;
+    --si-radius: 8px;
+    --si-font: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    margin: 0;
+    background: var(--si-bg);
+    color: var(--si-text);
+    font-family: var(--si-font);
+    font-size: 15px;
+    line-height: 1.45;
+}
+
+@media (prefers-color-scheme: dark) {
+    .stellaegis-issuer {
+        --si-bg: #1b1f24;
+        --si-surface: #242930;
+        --si-border: #3a414b;
+        --si-text: #e6e9ee;
+        --si-muted: #a2abb6;
+        --si-accent: #6ea8dc;
+        --si-accent-hover: #8fbce6;
+        --si-accent-text: #0f1419;
+        --si-danger: #f08a8e;
+        --si-danger-bg: #3a1f21;
+        --si-success: #7cd49a;
+        --si-success-bg: #1d3326;
+    }
+}
+
+.stellaegis-issuer * { box-sizing: border-box; }
+.stellaegis-issuer a:not(.auth-btn) { color: var(--si-accent); }
+
+.issuer-layout { min-height: 100vh; display: flex; flex-direction: column; }
+.issuer-topbar { display: flex; align-items: center; gap: 10px; padding: 12px 20px; background: var(--si-surface); border-bottom: 1px solid var(--si-border); }
+.issuer-topbar-name { font-weight: 600; }
+.issuer-topbar-sub { color: var(--si-muted); font-size: 13px; }
+.issuer-content { flex: 1; padding: 24px; max-width: 760px; }
+.issuer-page-title { margin: 0 0 16px; font-size: 22px; font-weight: 600; }
+
+/* The classes the page shares with the pages of Stellaegis.Identity, for a host without them. */
+.auth-help { margin: 0 0 16px; color: var(--si-muted); }
+.auth-small { font-size: 13px; }
+.auth-success { padding: 10px 12px; margin-bottom: 14px; color: var(--si-success); background: var(--si-success-bg); border: 1px solid var(--si-success); border-radius: var(--si-radius); font-size: 14px; }
+.auth-errors { padding: 10px 12px; margin-bottom: 14px; color: var(--si-danger); background: var(--si-danger-bg); border: 1px solid var(--si-danger); border-radius: var(--si-radius); font-size: 14px; }
+.auth-btn { display: inline-block; width: 100%; padding: 10px 14px; font: inherit; font-weight: 600; color: var(--si-accent-text); background: var(--si-accent); border: 1px solid transparent; border-radius: var(--si-radius); cursor: pointer; text-align: center; text-decoration: none; }
+.auth-btn:hover { background: var(--si-accent-hover); }
+.auth-btn-danger { color: #ffffff; background: var(--si-danger); }
+.auth-btn-danger:hover { filter: brightness(0.9); background: var(--si-danger); }
+.auth-link { background: none; border: none; padding: 0; font: inherit; color: var(--si-accent); cursor: pointer; text-decoration: underline; }
+.account-events { display: flex; flex-direction: column; gap: 6px; }
+.account-event { padding: 10px 14px; border: 1px solid var(--si-border); border-radius: var(--si-radius); background: var(--si-surface); }
+.account-event-head { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
+.account-event-label { font-weight: 600; }
+.account-event.ok .account-event-label { color: var(--si-success); }
+.account-event time { color: var(--si-muted); font-size: 12px; }
+.account-event-meta { margin-top: 2px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; font-size: 12px; color: var(--si-muted); }
+.sessions-revoke-all { margin-top: 20px; }
