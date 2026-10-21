@@ -4,10 +4,10 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- Stellaegis: the Microsoft.Extensions abstractions come with Stellaegis.Primitives.Hosting -->
-    <PackageVersion Include="Stellaegis.Primitives" Version="5.0.1" />
-    <PackageVersion Include="Stellaegis.Primitives.Hosting" Version="5.0.1" />
-    <PackageVersion Include="Stellaegis.Primitives.Data" Version="5.0.1" />
-    <PackageVersion Include="Stellaegis.Primitives.AspNetCore" Version="5.0.1" />
+    <PackageVersion Include="Stellaegis.Primitives" Version="5.1.0" />
+    <PackageVersion Include="Stellaegis.Primitives.Hosting" Version="5.1.0" />
+    <PackageVersion Include="Stellaegis.Primitives.Data" Version="5.1.0" />
+    <PackageVersion Include="Stellaegis.Primitives.AspNetCore" Version="5.1.0" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.13" />
     <!-- The OpenID Connect issuer: OpenIddict over EF Core at run time; the schema is installed by scripts -->
     <PackageVersion Include="OpenIddict.AspNetCore" Version="7.7.2" />
