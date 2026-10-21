@@ -30,6 +30,11 @@ it to the inventory, declares the public client `desktop`, and re-applies what t
 clients: the secret of the inventory, the redirect URIs of the desktop (`Stellaegis:Issuer:Clients`). Run again, it
 changes nothing.
 
+⚠ Re-applying the secret of the inventory from the issuer's configuration is a shortcut for reproducibility, not the
+rule: the issuer keeps only the hash of a secret and has no business holding it in clear. In a deployment, `install`
+provisions the module and prints the secret once; it goes to the vault or the configuration of the one service that
+uses it, and a rotation goes through the issuer's `apis/{module}/rotate` route, which returns the new secret once.
+
 ## Running
 
 Two terminals:
