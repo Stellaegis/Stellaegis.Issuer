@@ -12,10 +12,12 @@
     <PackageReference Include="xunit.v3" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Npgsql" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Stellaegis.Issuer\Stellaegis.Issuer.csproj" />
+    <ProjectReference Include="..\..\src\Stellaegis.Issuer.PostgreSQL\Stellaegis.Issuer.PostgreSQL.csproj" />
   </ItemGroup>
 
   <ItemGroup>

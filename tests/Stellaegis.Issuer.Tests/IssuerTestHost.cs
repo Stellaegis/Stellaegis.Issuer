@@ -119,13 +119,17 @@ internal static class IssuerTestHost
     /// <summary>
     /// Builds and starts the host. The admission at the door is off unless <paramref name="door"/>: it would refuse a
     /// blocked person before the authorization route sends the client <c>access_denied</c>, which is what the flow
-    /// tests look at.
+    /// tests look at. The SQLite database is created by EF Core unless <paramref name="ensureCreated"/> is off —
+    /// the PostgreSQL tests install theirs from the frozen script, and prove that EF Core never has to.
     /// </summary>
-    public static async Task<WebApplication> StartAsync(this WebApplicationBuilder builder, CancellationToken ct, bool door = false)
+    public static async Task<WebApplication> StartAsync(this WebApplicationBuilder builder, CancellationToken ct, bool door = false, bool ensureCreated = true)
     {
         var app = builder.Build();
-        using (var scope = app.Services.CreateScope())
+        if (ensureCreated)
+        {
+            using var scope = app.Services.CreateScope();
             await scope.ServiceProvider.GetRequiredService<IssuerDbContext>().Database.EnsureCreatedAsync(ct);
+        }
         app.UseAuthentication();
         if (door)
             app.UseStellaegisActorAdmission();
