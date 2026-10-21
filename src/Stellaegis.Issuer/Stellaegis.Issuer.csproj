@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Stellaegis.Issuer</RootNamespace>
+    <PackageId>Stellaegis.Issuer</PackageId>
+    <Description>Stellaegis Issuer: the OpenID Connect issuer of an application assembled on Stellaegis.Primitives. It takes a user the host has authenticated and turns them into tokens — authorization code with PKCE, client credentials, refresh —, holds the clients and the scopes, revokes, and tells every resource server whether a token is revoked. Built on OpenIddict; it issues tokens and knows no account.</Description>
+    <PackageTags>stellaegis;issuer;oidc;openid-connect;oauth2;openiddict;tokens</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Stellaegis.Primitives" />
+    <PackageReference Include="Stellaegis.Primitives.Hosting" />
+    <PackageReference Include="Stellaegis.Primitives.AspNetCore" />
+    <PackageReference Include="OpenIddict.AspNetCore" />
+    <PackageReference Include="OpenIddict.EntityFrameworkCore" />
+    <PackageReference Include="EFCore.NamingConventions" />
+    <InternalsVisibleTo Include="Stellaegis.Issuer.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+</Project>
