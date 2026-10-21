@@ -53,25 +53,42 @@ internal sealed class RefusingSubjects : IActorAdmission
 
 /// <summary>
 /// The authentication of the host, read from headers: <c>X-Subject</c> names the person signed in, with
-/// <c>X-Email</c> and <c>X-Name</c>; a challenge answers 401; a sign-out is recorded. What the cookie of Identity
-/// or Negotiate would be for the issuer.
+/// <c>X-Email</c>, <c>X-Name</c> and <c>X-Grants</c> for the operations granted; <c>Authorization: Bearer</c> names
+/// a service, every operation granted; a challenge answers 401; a sign-out is recorded. What the cookie of Identity
+/// or Negotiate would be for the issuer, and what the bearer of a resource server would be for its routes.
 /// </summary>
 internal sealed class HeaderAuthentication(IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder)
     : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder), IAuthenticationSignOutHandler
 {
     public const string SchemeName = "Header";
+    public const string GrantClaim = "grant";
 
     public static int SignOuts;
 
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
-        if (!Request.Headers.TryGetValue("X-Subject", out var subject) || string.IsNullOrWhiteSpace(subject))
+        string? subject = null;
+        IEnumerable<string> grants = [];
+        if (Request.Headers.TryGetValue("X-Subject", out var given) && !string.IsNullOrWhiteSpace(given))
+        {
+            subject = given.ToString();
+            grants = Request.Headers.TryGetValue("X-Grants", out var granted)
+                ? granted.ToString().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                : [];
+        }
+        else if (System.Net.Http.Headers.AuthenticationHeaderValue.TryParse(Request.Headers.Authorization, out var bearer) && bearer.Scheme == "Bearer" && bearer.Parameter is { } token)
+        {
+            subject = token;
+            grants = IssuerOperations.All.Select(operation => operation.ToString());
+        }
+        if (subject is null)
             return Task.FromResult(AuthenticateResult.NoResult());
-        var claims = new List<Claim> { new("sub", subject.ToString()), new(ClaimTypes.NameIdentifier, subject.ToString()) };
+        var claims = new List<Claim> { new("sub", subject), new(ClaimTypes.NameIdentifier, subject) };
         if (Request.Headers.TryGetValue("X-Email", out var email))
             claims.Add(new Claim("email", email.ToString()));
         if (Request.Headers.TryGetValue("X-Name", out var name))
             claims.Add(new Claim("name", name.ToString()));
+        claims.AddRange(grants.Select(grant => new Claim(GrantClaim, grant)));
         var identity = new ClaimsIdentity(claims, SchemeName);
         return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName)));
     }
@@ -103,9 +120,7 @@ internal static class IssuerTestHost
         builder.Services.AddSingleton<IEventPublisher, CapturingEventPublisher>();
         builder.Services.AddSingleton<RefusingSubjects>();
         builder.Services.AddStellaegisActorAdmission(provider => provider.GetRequiredService<RefusingSubjects>());
-        builder.Services.AddAuthentication(HeaderAuthentication.SchemeName)
-            .AddScheme<AuthenticationSchemeOptions, HeaderAuthentication>(HeaderAuthentication.SchemeName, null);
-        builder.Services.AddAuthorization();
+        builder.Services.AddTestAuthentication();
         builder.Services.AddStellaegisIssuer(options =>
         {
             options.Certificates.UseDevelopmentCertificates = true;
@@ -123,7 +138,7 @@ internal static class IssuerTestHost
     /// tests look at. The SQLite database is created by EF Core unless <paramref name="ensureCreated"/> is off —
     /// the PostgreSQL tests install theirs from the frozen script, and prove that EF Core never has to.
     /// </summary>
-    public static async Task<WebApplication> StartAsync(this WebApplicationBuilder builder, CancellationToken ct, bool door = false, bool ensureCreated = true)
+    public static async Task<WebApplication> StartAsync(this WebApplicationBuilder builder, CancellationToken ct, bool door = false, bool ensureCreated = true, Action<WebApplication>? map = null)
     {
         var app = builder.Build();
         if (ensureCreated)
@@ -136,9 +151,47 @@ internal static class IssuerTestHost
             app.UseStellaegisActorAdmission();
         app.UseAuthorization();
         app.MapStellaegisIssuer();
+        app.MapGroup("/api/admin").MapIssuerAdminEndpoints().RequireAuthorizationPerOperation(operation => operation.ToString());
+        map?.Invoke(app);
         await app.StartAsync(ct);
         return app;
     }
+
+    /// <summary>The header authentication, one policy per operation of the module requiring its grant, and the startup check of the administration routes.</summary>
+    public static IServiceCollection AddTestAuthentication(this IServiceCollection services)
+    {
+        services.AddAuthentication(HeaderAuthentication.SchemeName)
+            .AddScheme<AuthenticationSchemeOptions, HeaderAuthentication>(HeaderAuthentication.SchemeName, null);
+        services.AddAuthorization(options =>
+        {
+            foreach (var operation in IssuerOperations.All)
+                options.AddPolicy(operation.ToString(), policy => policy.RequireClaim(HeaderAuthentication.GrantClaim, operation.ToString()));
+        });
+        services.AddStellaegisIssuerAdministration();
+        return services;
+    }
+
+    /// <summary>Every operation of the module, as grants.</summary>
+    public static readonly string[] Everything = IssuerOperations.All.Select(operation => operation.ToString()).ToArray();
+
+    /// <summary>A client of the host calling as <paramref name="subject"/>, holding <paramref name="grants"/> — apart from <see cref="ClientAs"/>, whose second argument is an e-mail.</summary>
+    public static HttpClient ClientHolding(this WebApplication app, string subject, params string[] grants)
+    {
+        var client = app.GetTestClient();
+        client.DefaultRequestHeaders.Add("X-Subject", subject);
+        if (grants.Length > 0)
+            client.DefaultRequestHeaders.Add("X-Grants", string.Join(",", grants));
+        return client;
+    }
+
+    /// <summary>The code of the problem details a route answered, or <see langword="null"/>.</summary>
+    public static async Task<string?> CodeOfAsync(this HttpResponseMessage response, CancellationToken ct)
+    {
+        var problem = await response.Content.ReadFromJsonAsync<ProblemBody>(ct);
+        return problem?.Code;
+    }
+
+    private sealed record ProblemBody(string? Code);
 
     /// <summary>A public client, <c>desktop</c>, allowed the scope <paramref name="scope"/>, and that scope with itself as resource.</summary>
     public static async Task DeclarePublicClientAsync(this WebApplication app, string clientId = "desktop", string scope = "documents", CancellationToken ct = default)

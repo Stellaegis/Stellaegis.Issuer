@@ -47,7 +47,7 @@ else
         }
     </div>
 
-    <form method="post" asp-page-handler="RevokeAll" class="sessions-revoke-all" onsubmit="return confirm(@Html.Raw(System.Text.Json.JsonSerializer.Serialize(T["Sessions.RevokeAllConfirm"])))">
-        <button type="submit" class="auth-btn auth-btn-danger">@T["Sessions.RevokeAll"]</button>
+    <form method="post" asp-page-handler="RevokeAll" class="sessions-revoke-all">
+        <button type="submit" class="auth-btn auth-btn-danger" data-confirm="@T["Sessions.RevokeAllConfirm"]" onclick="return confirm(this.dataset.confirm)">@T["Sessions.RevokeAll"]</button>
     </form>
 }

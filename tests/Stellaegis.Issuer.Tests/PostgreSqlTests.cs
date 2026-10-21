@@ -49,9 +49,7 @@ public sealed class PostgreSqlTests(PostgreSqlFixture database) : IAsyncLifetime
         builder.Services.AddSingleton<IEventPublisher, CapturingEventPublisher>();
         builder.Services.AddSingleton<RefusingSubjects>();
         builder.Services.AddStellaegisActorAdmission(provider => provider.GetRequiredService<RefusingSubjects>());
-        builder.Services.AddAuthentication(HeaderAuthentication.SchemeName)
-            .AddScheme<AuthenticationSchemeOptions, HeaderAuthentication>(HeaderAuthentication.SchemeName, null);
-        builder.Services.AddAuthorization();
+        builder.Services.AddTestAuthentication();
         builder.Services.AddStellaegisIssuerPostgreSQL(
             options => options.ConnectionString = database.AppConnectionString,
             options =>
