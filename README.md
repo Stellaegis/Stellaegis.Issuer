@@ -210,6 +210,13 @@ already declared, which the installation calls after a configuration changed.
 module's name, and the scope of the same name whose resource is the module. The installation calls it when it
 declares a module's API; in the SaaS, the tenancy does; the registry never does.
 
+⚠ **The discovery document does not list the scopes of the catalog.** Its `scopes_supported` holds those the
+options name — `openid`, `offline_access` and `StandardScopes` —, not those of the modules, which the catalog keeps
+in the database: OpenIddict accepts a scope from either source at the authorization, and announces only its
+options. A client that requests `inventory` gets it, though the document does not name it. OpenID Connect Discovery
+allows it — a server may leave out scopes it supports —, and no common client checks a request against that list;
+the names of the modules, which describe the application, are not published either.
+
 ## The administration routes
 
 `MapIssuerAdminEndpoints()` maps the administration of the issuer, relative to the group it is called on, under
