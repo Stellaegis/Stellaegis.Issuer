@@ -7,6 +7,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [5.2.0] — 2026-10-23
+
+### Added
+
+- `amr` in the access and the identity tokens: how the person proved who they are, with the values of RFC 8176,
+  copied from the `amr` claims of the host's session — as named, or as ASP.NET Core maps them inbound. Written as a
+  JSON array even for one method, as OpenID Connect Core requires; a refresh keeps the methods of the login. A
+  resource server on `AddStellaegisBearer` reads one `amr` claim per method. `Stellaegis.Identity` 6.0.0 writes
+  them; a session that says none gives a token without `amr`, as before.
+
+### Changed
+
+- The example host takes `Stellaegis.Identity` 6.0.0: its `install` creates the first administrator without a
+  password and prints the activation link.
+
 ## [5.1.0] — 2026-10-23
 
 ### Added

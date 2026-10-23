@@ -24,7 +24,7 @@ The library targets .NET 10 and is released under the MIT license.
 | `Stellaegis.Issuer.Client` | What a host that is not the issuer takes: the validation of the bearer tokens, the admission of the revoked tokens, the credentials a service speaks with. No OpenIddict | `Stellaegis.Primitives.AspNetCore`, JwtBearer |
 | `Stellaegis.Issuer.Server` | The sessions page a person ends their sessions on, as a Razor class library the host mounts beside the pages of the accounts | `Stellaegis.Issuer`, ASP.NET Core |
 
-The five packages share one version, and follow the major version of Stellaegis.Primitives: 5.1.0 runs on
+The five packages share one version, and follow the major version of Stellaegis.Primitives: 5.2.0 runs on
 Primitives 5.2.0. A host takes one store adapter, PostgreSQL or SQL Server.
 
 ## Two hosts, in full
@@ -139,12 +139,19 @@ Three, as OpenIddict serves them on `/connect/token`, with PKCE required of ever
 
 | Flow | Who | What the token carries |
 | --- | --- | --- |
-| Authorization code with PKCE, then refresh | a person, through a browser or a native application | `sub` the person's id, `email`; `name` in the identity token only; the scopes requested; as audiences the resources of those scopes |
+| Authorization code with PKCE, then refresh | a person, through a browser or a native application | `sub` the person's id, `email`, `amr` how they proved it; `name` in the identity token only; the scopes requested; as audiences the resources of those scopes |
 | Client credentials | a service, with the secret the installation gave it | `sub` the client id; the scopes requested, and their resources as audiences |
 
-The token is compact: `sub`, `email`, scopes, audiences, nothing else — no tenant, no permission; the rights are
-decided at every call, by `Stellaegis.Access`, so that revoking one is immediate. A scope is the name of a module,
-and the audience of a token carrying it is the same name: a resource server accepts the tokens of its modules.
+The token is compact: `sub`, `email`, `amr`, scopes, audiences, nothing else — no tenant, no permission; the rights
+are decided at every call, by `Stellaegis.Access`, so that revoking one is immediate. A scope is the name of a
+module, and the audience of a token carrying it is the same name: a resource server accepts the tokens of its
+modules.
+
+`amr` says how the person proved who they are, with the values of RFC 8176, copied from the `amr` claims of the
+host's session — `Stellaegis.Identity` 6.0.0 writes `pwd`, then `otp` and `mfa` after a second factor. A decision
+asks whether a second factor was used for this session, not whether the account has one. The claim is a JSON array
+even for one method, as OpenID Connect Core requires; a refresh keeps the methods of the login, since it proves
+nothing anew; a session whose scheme says none gives a token without `amr`.
 
 `/connect/authorize` takes a person **the host has authenticated**: a stranger is challenged on the host's scheme
 — `AuthenticationScheme` in the options, or the host's default — and comes back signed in; a person signed in is
@@ -251,8 +258,9 @@ by itself.
 
 `AddStellaegisBearer` registers the JWT bearer authentication of the tokens the issuer issued, as the default
 scheme of the host: the issuer as authority, read through its discovery document; the audiences this host serves,
-which are the names of its modules; the claims kept as the token names them, `sub` and `scope`, not their
-WS-Federation renames; the scopes split into one `scope` claim each, for a policy that requires one.
+which are the names of its modules; the claims kept as the token names them, `sub`, `scope` and `amr`, not their
+WS-Federation renames; the scopes split into one `scope` claim each, the methods into one `amr` claim each, for a
+policy that requires one.
 
 ```text
 Stellaegis:Issuer:Bearer:Authority = https://id.acme.example
