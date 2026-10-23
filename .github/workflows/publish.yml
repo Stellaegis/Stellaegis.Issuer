@@ -19,7 +19,8 @@ jobs:
   publish:
     runs-on: ubuntu-latest
 
-    # The PostgreSQL tests run against this container; without it they would be skipped, and a skipped test fails the run.
+    # The store tests run against these containers; without them they would be skipped, and a skipped test fails the
+    # run. Throwaway containers: the SQL Server password guards nothing that outlives the job.
     services:
       postgres:
         image: postgres:17
@@ -30,9 +31,20 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U postgres"
           --health-interval 5s --health-timeout 5s --health-retries 20
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2025-latest
+        env:
+          ACCEPT_EULA: Y
+          MSSQL_SA_PASSWORD: Stellaegis-Tests-1
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P Stellaegis-Tests-1 -C -Q 'select 1'"
+          --health-interval 10s --health-timeout 5s --health-retries 30
 
     env:
       STELLAEGIS_TEST_POSTGRESQL: Host=localhost;Username=postgres;Database=postgres
+      STELLAEGIS_TEST_SQLSERVER: Server=localhost,1433;User Id=sa;Password=Stellaegis-Tests-1;TrustServerCertificate=true
 
     steps:
       - uses: actions/checkout@v7

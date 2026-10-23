@@ -7,6 +7,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [5.1.0] — 2026-10-23
+
+### Added
+
+- `Stellaegis.Issuer.SqlServer`: the OpenIddict stores on SQL Server, `AddStellaegisIssuerSqlServer` and its options
+  under `Stellaegis:Issuer:SqlServer`, the schema `oidc` declared as a module database that
+  `Stellaegis.Primitives.Data` 5.2.0 installs and verifies. Its script is the DDL of the model generated on the SQL
+  Server provider and frozen, with a binary collation on `client_id`, the name of a scope and the reference of a
+  token, which OAuth compares case-sensitively.
+
+### Changed
+
+- The packages run on `Stellaegis.Primitives` 5.2.0.
+
 ## [5.0.0] — 2026-10-21
 
 First release of the packages: the OpenID Connect issuer of the Stellaegis framework — `Stellaegis.Identity.OpenIddict`,

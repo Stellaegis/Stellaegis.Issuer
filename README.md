@@ -20,11 +20,12 @@ The library targets .NET 10 and is released under the MIT license.
 | --- | --- | --- |
 | `Stellaegis.Issuer` | The issuer: OpenIddict as the server — authorization code with PKCE, client credentials, refresh tokens —, the protocol routes, the catalog of clients and scopes, the provisioning of a module's credentials, the revocation, the administration routes, the module and its operations, the event | `Stellaegis.Issuer.Client`, `Stellaegis.Primitives.AspNetCore`, OpenIddict, EF Core |
 | `Stellaegis.Issuer.PostgreSQL` | The stores on PostgreSQL, and the `oidc` schema declared as a module database for the installation and the verification | `Stellaegis.Primitives.Data`, the Npgsql provider of EF Core |
+| `Stellaegis.Issuer.SqlServer` | The stores on SQL Server, and the `oidc` schema declared as a module database, likewise | `Stellaegis.Primitives.Data`, the SQL Server provider of EF Core |
 | `Stellaegis.Issuer.Client` | What a host that is not the issuer takes: the validation of the bearer tokens, the admission of the revoked tokens, the credentials a service speaks with. No OpenIddict | `Stellaegis.Primitives.AspNetCore`, JwtBearer |
 | `Stellaegis.Issuer.Server` | The sessions page a person ends their sessions on, as a Razor class library the host mounts beside the pages of the accounts | `Stellaegis.Issuer`, ASP.NET Core |
 
-The four packages share one version, and follow the major version of Stellaegis.Primitives: 5.0.0 runs on
-Primitives 5.1.0.
+The five packages share one version, and follow the major version of Stellaegis.Primitives: 5.1.0 runs on
+Primitives 5.2.0. A host takes one store adapter, PostgreSQL or SQL Server.
 
 ## Two hosts, in full
 
@@ -101,7 +102,7 @@ operations, its bus behind `IEventPublisher`, the accounts it authenticates with
 
 ## Installing, then verifying
 
-The issuer lives in the schema `oidc` of a PostgreSQL database: four tables, `applications`, `authorizations`,
+The issuer lives in the schema `oidc` of a PostgreSQL or a SQL Server database: four tables, `applications`, `authorizations`,
 `scopes`, `tokens`, the OpenIddict model. Two executants, two roles, as everywhere in the family: an installer
 installs, under a role that owns the schema; the application verifies at every startup, under its own role, which
 was granted its data rights and never a DDL right.
@@ -111,11 +112,18 @@ await DatabaseLifecycle.InstallAsync([IdentityDatabase.Value, IssuerDatabase.Val
 ```
 
 The script of the schema is the DDL of the EF Core model of the OpenIddict stores, generated once from the model
-on the Npgsql provider and frozen in the package: EF Core reads and writes these tables at run time and never
+on the provider of each engine and frozen in its package: EF Core reads and writes these tables at run time and never
 creates nor migrates them — a test proves the model reads what the script installed, and that no migration
 exists. The installation records each script with its checksum and is replayable; the application then verifies —
 `AddStellaegisDatabaseVerification()` in a generic host, `app.Services.VerifyStellaegisDatabasesAsync()` in an
 ASP.NET Core host — and refuses to start when the schema is not installed, or not as the package declares it.
+
+On SQL Server, `AddStellaegisIssuerSqlServer` replaces `AddStellaegisIssuerPostgreSQL`, its connection string under
+`Stellaegis:Issuer:SqlServer`; the application role is a database role, created by the installation when missing,
+which the host makes its user a member of. The script gives `client_id`, the name of a scope and the reference of a
+token a binary collation: OAuth compares them case-sensitively, and a database of SQL Server usually does not — on
+a case-insensitive column, `Desktop` would be refused as a duplicate of `desktop`. The rest of the database keeps the
+collation its installation chose.
 
 No client is seeded, no scope. What exists is what the installation declared, as the example's `install` verb
 does, through the services of the module: the credentials of each service, the native client of the desktop, and
@@ -315,14 +323,18 @@ nothing.
 
 ```powershell
 $env:STELLAEGIS_TEST_POSTGRESQL = "Host=127.0.0.1;Username=postgres;Database=postgres"
+$env:STELLAEGIS_TEST_SQLSERVER = "Server=.;Integrated Security=true;TrustServerCertificate=true"
 dotnet test --solution Stellaegis.Issuer.slnx
 ```
 
 The flows, the revocation, the catalog, the routes, the sessions page and a resource server apart run on the test
 server over SQLite in memory. The PostgreSQL tests create the database `stellaegis_issuer_tests` on that server if
 it does not exist, install the schema as an installer does, under that connection, and run under an ordinary role
-they create, `stellaegis_issuer_app`. Without the variable they are skipped. The publishing workflow runs them
-against a PostgreSQL service and fails on a skipped test.
+they create, `stellaegis_issuer_app`. The SQL Server tests run the same scenarios: they create the database
+`stellaegis_issuer_tests` with a case-insensitive collation, install the schema, run EF Core as a user without login
+member of the application role — by `EXECUTE AS USER`, so that an instance accepting integrated security only runs
+them —, and drop the database at the end. Without a variable, its tests are skipped. The publishing workflow runs
+them against a PostgreSQL and a SQL Server service, and fails on a skipped test.
 
 ## License
 
