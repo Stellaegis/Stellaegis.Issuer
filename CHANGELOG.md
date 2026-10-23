@@ -25,8 +25,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- An empty value is absent. `Password` left empty beside an empty `Path` refused the registration — « Password goes
-  with Path » —, and a client's `Secret` left empty refused it too, or became the secret of a confidential client:
+- An empty value is absent. `Password` left empty beside an empty `Path` refused the registration — "Password goes
+  with Path" —, and a client's `Secret` left empty refused it too, or became the secret of a confidential client:
   an exhaustive `appsettings.json` could not show these keys. A password given without a file is still refused.
 
 ## [5.0.0] — 2026-10-21
