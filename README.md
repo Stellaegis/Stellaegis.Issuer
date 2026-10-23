@@ -174,11 +174,19 @@ Stellaegis:Issuer:Certificates:Encryption:Path     the same, for the encryption;
 Stellaegis:Issuer:Clients:{clientId}:Secret        what the environment adds to a client the installation declared
 Stellaegis:Issuer:Clients:{clientId}:RedirectUris  idem; PostLogoutRedirectUris
 Stellaegis:Issuer:PostgreSQL:ConnectionString      the application's connection, read at registration; empty, the registration refuses
+Stellaegis:Issuer:SqlServer:ConnectionString       the same, on SQL Server
 ```
 
 Every option is validated when the host starts. Outside the `Development` environment, the development
 certificates are refused — every restart would renew them and invalidate every token issued — and a signing
 certificate is required, an encryption one too when the access tokens are encrypted.
+
+A key left empty is absent, as an exhaustive `appsettings.json` shows it and as a variable of the environment set
+to nothing gives it: an empty `Path`, `Password`, `Thumbprint` or `Secret` names nothing, and a configuration that
+names no certificate is told, outside `Development`, that the signing one is required. With the development
+certificates, the named ones are neither loaded nor checked, so that the placeholders of a development configuration
+stay harmless. A file — `Path`, its password from the environment or a secret store — is the choice that holds on
+Windows and Linux alike; `Thumbprint` reads the current user's store, which a container keeps only on a volume.
 
 ### The clients and the scopes
 

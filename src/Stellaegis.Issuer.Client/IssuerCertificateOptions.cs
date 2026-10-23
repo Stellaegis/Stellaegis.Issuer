@@ -18,6 +18,9 @@ public sealed class IssuerCertificateOptions : IValidatableOptions
     /// <summary>The thumbprint of the certificate in the current user's personal store, instead of a file.</summary>
     public string? Thumbprint { get; set; }
 
+    // A value left empty is absent: an exhaustive appsettings.json shows every key with an empty value, and a
+    // variable of the environment cannot make one null again.
+
     /// <summary>Whether the options name a certificate at all.</summary>
     public bool IsSet => !string.IsNullOrWhiteSpace(Path) || !string.IsNullOrWhiteSpace(Thumbprint);
 
@@ -26,7 +29,7 @@ public sealed class IssuerCertificateOptions : IValidatableOptions
     {
         if (!string.IsNullOrWhiteSpace(Path) && !string.IsNullOrWhiteSpace(Thumbprint))
             return $"{nameof(Path)} and {nameof(Thumbprint)} are exclusive: one certificate comes from a file or from the store.";
-        if (string.IsNullOrWhiteSpace(Path) && Password is not null)
+        if (string.IsNullOrWhiteSpace(Path) && !string.IsNullOrWhiteSpace(Password))
             return $"{nameof(Password)} goes with {nameof(Path)}.";
         return null;
     }
@@ -36,7 +39,7 @@ public sealed class IssuerCertificateOptions : IValidatableOptions
     public X509Certificate2 Load()
     {
         if (!string.IsNullOrWhiteSpace(Path))
-            return X509CertificateLoader.LoadPkcs12FromFile(Path, Password);
+            return X509CertificateLoader.LoadPkcs12FromFile(Path, string.IsNullOrWhiteSpace(Password) ? null : Password);
         if (string.IsNullOrWhiteSpace(Thumbprint))
             throw new InvalidOperationException("No certificate is named: set Path, or Thumbprint.");
 

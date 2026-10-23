@@ -181,8 +181,8 @@ public sealed class IssuerCatalog(IOpenIddictApplicationManager applications, IO
                 continue;
             var descriptor = new OpenIddictApplicationDescriptor();
             await applications.PopulateAsync(descriptor, application, cancellationToken).ConfigureAwait(false);
-            if (descriptor.ClientType == ClientTypes.Confidential && configured.Secret is not null)
-                descriptor.ClientSecret = configured.Secret;
+            if (descriptor.ClientType == ClientTypes.Confidential && configured.SecretOrNull is { } secret)
+                descriptor.ClientSecret = secret;
             if (configured.RedirectUris.Length > 0)
             {
                 descriptor.RedirectUris.Clear();
@@ -304,7 +304,7 @@ public sealed class IssuerCatalog(IOpenIddictApplicationManager applications, IO
         string? generated = null;
         if (definition.Kind == ClientKind.Confidential)
         {
-            descriptor.ClientSecret = definition.Secret ?? configured?.Secret;
+            descriptor.ClientSecret = definition.Secret ?? configured?.SecretOrNull;
             if (descriptor.ClientSecret is null && !keepSecret)
                 descriptor.ClientSecret = generated = OpenIddictClientProvisioner.NewSecret();
             descriptor.Permissions.Add(Permissions.Endpoints.Token);

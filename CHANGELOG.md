@@ -20,6 +20,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 
 - The packages run on `Stellaegis.Primitives` 5.2.0.
+- With `UseDevelopmentCertificates`, the signing and encryption certificates named in the options are no longer
+  checked, being never loaded: a development configuration may keep its placeholders.
+
+### Fixed
+
+- An empty value is absent. `Password` left empty beside an empty `Path` refused the registration — « Password goes
+  with Path » —, and a client's `Secret` left empty refused it too, or became the secret of a confidential client:
+  an exhaustive `appsettings.json` could not show these keys. A password given without a file is still refused.
 
 ## [5.0.0] — 2026-10-21
 

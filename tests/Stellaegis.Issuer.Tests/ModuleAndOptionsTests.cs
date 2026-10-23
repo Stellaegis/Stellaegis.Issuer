@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
@@ -48,6 +49,7 @@ public sealed class ModuleAndOptionsTests
     [InlineData("issuer")]
     [InlineData("redirect")]
     [InlineData("certificate")]
+    [InlineData("password")]
     public void Options_that_do_not_hold_are_refused_at_registration(string what)
     {
         var services = new ServiceCollection();
@@ -59,10 +61,72 @@ public sealed class ModuleAndOptionsTests
                 case "lifetime": options.AccessTokenLifetime = TimeSpan.Zero; break;
                 case "issuer": options.Issuer = "id.acme.example"; break;
                 case "redirect": options.Clients["x"] = new ConfiguredClientOptions { RedirectUris = ["nope"] }; break;
-                case "certificate": options.Certificates.Signing = new IssuerCertificateOptions { Path = "a.pfx", Thumbprint = "ABC" }; break;
+                case "certificate":
+                    options.Certificates.UseDevelopmentCertificates = false;
+                    options.Certificates.Signing = new IssuerCertificateOptions { Path = "a.pfx", Thumbprint = "ABC" };
+                    break;
+                case "password":
+                    options.Certificates.UseDevelopmentCertificates = false;
+                    options.Certificates.Signing = new IssuerCertificateOptions { Path = "", Password = "secret" };
+                    break;
             }
         }, db => db.UseSqlite("Data Source=:memory:")));
         Assert.StartsWith("IssuerOptions:", exception.Message);
+    }
+
+    [Fact]
+    public void The_empty_values_of_an_exhaustive_appsettings_are_absent()
+    {
+        // Every key shown, nothing set: what an exhaustive appsettings.json holds, and what a variable of the
+        // environment set to nothing gives.
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Stellaegis:Issuer:Certificates:UseDevelopmentCertificates"] = "false",
+            ["Stellaegis:Issuer:Certificates:Signing:Path"] = "",
+            ["Stellaegis:Issuer:Certificates:Signing:Password"] = "",
+            ["Stellaegis:Issuer:Certificates:Signing:Thumbprint"] = "",
+            ["Stellaegis:Issuer:Certificates:Encryption:Path"] = "",
+            ["Stellaegis:Issuer:Certificates:Encryption:Password"] = "",
+            ["Stellaegis:Issuer:Certificates:Encryption:Thumbprint"] = "",
+            ["Stellaegis:Issuer:Clients:reports:Secret"] = "",
+        }).Build();
+        var options = new IssuerOptions();
+        configuration.GetSection(IssuerOptions.SectionName).Bind(options);
+
+        Assert.Null(options.FindError());
+        Assert.False(options.Certificates.Signing.IsSet);
+        Assert.False(options.Certificates.Encryption.IsSet);
+        Assert.Null(options.Clients["reports"].SecretOrNull);
+    }
+
+    [Fact]
+    public void With_the_development_certificates_the_named_ones_are_neither_loaded_nor_checked()
+    {
+        // The placeholder of a development configuration: a password without its file, harmless since unused.
+        var options = new IssuerOptions();
+        options.Certificates.UseDevelopmentCertificates = true;
+        options.Certificates.Signing = new IssuerCertificateOptions { Path = "", Password = "CHANGE_ME" };
+
+        Assert.Null(options.FindError());
+        new ServiceCollection().AddStellaegisIssuer(o =>
+        {
+            o.Certificates.UseDevelopmentCertificates = true;
+            o.Certificates.Signing = new IssuerCertificateOptions { Password = "CHANGE_ME" };
+        }, db => db.UseSqlite("Data Source=:memory:"));
+    }
+
+    [Fact]
+    public async Task Outside_development_empty_certificates_are_missing_ones()
+    {
+        var empty = IssuerTestHost.Builder(options =>
+        {
+            options.Certificates.UseDevelopmentCertificates = false;
+            options.Certificates.Signing = new IssuerCertificateOptions { Path = "", Password = "", Thumbprint = "" };
+        }, environment: Environments.Production).Build();
+
+        var exception = await Assert.ThrowsAsync<OptionsValidationException>(() => empty.StartAsync(Ct));
+        Assert.Contains("Signing is required outside Development", exception.Message);
+        await empty.DisposeAsync();
     }
 
     [Fact]

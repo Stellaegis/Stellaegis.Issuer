@@ -129,8 +129,14 @@ public sealed class IssuerCertificatesOptions : IValidatableOptions
     public IssuerCertificateOptions Encryption { get; set; } = new();
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// With the development certificates, <see cref="Signing"/> and <see cref="Encryption"/> are not loaded, and
+    /// not checked: the placeholders of a development configuration — a password <c>CHANGE_ME</c> — stay harmless.
+    /// </remarks>
     public string? FindError()
     {
+        if (UseDevelopmentCertificates)
+            return null;
         if (Signing.FindError() is { } signing)
             return $"{nameof(Signing)}: {signing}";
         if (Encryption.FindError() is { } encryption)
@@ -142,8 +148,14 @@ public sealed class IssuerCertificatesOptions : IValidatableOptions
 /// <summary>What an environment adds to a client the installation declared.</summary>
 public sealed class ConfiguredClientOptions : IValidatableOptions
 {
-    /// <summary>The secret of a confidential client, from a secret store. A public client has none.</summary>
+    /// <summary>
+    /// The secret of a confidential client, from a secret store. A public client has none; left empty, as an
+    /// exhaustive appsettings.json shows it, it is absent.
+    /// </summary>
     public string? Secret { get; set; }
+
+    /// <summary>The secret, or <see langword="null"/> when it is left empty.</summary>
+    internal string? SecretOrNull => string.IsNullOrWhiteSpace(Secret) ? null : Secret;
 
     /// <summary>The redirect URIs of a public client, absolute, which depend on where the client runs.</summary>
     public string[] RedirectUris { get; set; } = [];
@@ -154,8 +166,6 @@ public sealed class ConfiguredClientOptions : IValidatableOptions
     /// <inheritdoc/>
     public string? FindError()
     {
-        if (Secret is not null && string.IsNullOrWhiteSpace(Secret))
-            return $"{nameof(Secret)} is empty.";
         foreach (var uri in RedirectUris.Concat(PostLogoutRedirectUris))
         {
             if (!Uri.TryCreate(uri, UriKind.Absolute, out _))
