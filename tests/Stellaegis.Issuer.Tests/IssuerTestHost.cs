@@ -88,6 +88,8 @@ internal sealed class HeaderAuthentication(IOptionsMonitor<AuthenticationSchemeO
             claims.Add(new Claim("email", email.ToString()));
         if (Request.Headers.TryGetValue("X-Name", out var name))
             claims.Add(new Claim("name", name.ToString()));
+        if (Request.Headers.TryGetValue("X-Amr", out var methods))
+            claims.AddRange(methods.ToString().Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(method => new Claim("amr", method)));
         claims.AddRange(grants.Select(grant => new Claim(GrantClaim, grant)));
         var identity = new ClaimsIdentity(claims, SchemeName);
         return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName)));
@@ -208,7 +210,7 @@ internal static class IssuerTestHost
 
     public static RefusingSubjects Refusing(this WebApplication app) => app.Services.GetRequiredService<RefusingSubjects>();
 
-    public static HttpClient ClientAs(this WebApplication app, string? subject, string? email = null, string? name = null)
+    public static HttpClient ClientAs(this WebApplication app, string? subject, string? email = null, string? name = null, string? amr = null)
     {
         var client = app.GetTestClient();
         if (subject is not null)
@@ -217,6 +219,8 @@ internal static class IssuerTestHost
             client.DefaultRequestHeaders.Add("X-Email", email);
         if (name is not null)
             client.DefaultRequestHeaders.Add("X-Name", name);
+        if (amr is not null)
+            client.DefaultRequestHeaders.Add("X-Amr", amr);
         return client;
     }
 
@@ -241,10 +245,10 @@ internal static class IssuerTestHost
         });
 
     /// <summary>Walks the authorization for <paramref name="subject"/> and returns the code of the redirect.</summary>
-    public static async Task<(string Code, string Verifier)> AuthorizeAsync(this WebApplication app, string subject, string clientId = "desktop", CancellationToken ct = default)
+    public static async Task<(string Code, string Verifier)> AuthorizeAsync(this WebApplication app, string subject, string clientId = "desktop", CancellationToken ct = default, string? amr = null)
     {
         var (verifier, challenge) = Pkce();
-        using var client = app.ClientAs(subject, email: $"{subject}@acme.test", name: subject);
+        using var client = app.ClientAs(subject, email: $"{subject}@acme.test", name: subject, amr: amr);
         var response = await client.GetAsync(AuthorizeUrl(clientId, challenge), ct);
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
         var location = response.Headers.Location!;

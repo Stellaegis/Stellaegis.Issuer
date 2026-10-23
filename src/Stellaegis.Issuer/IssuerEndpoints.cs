@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Security.Claims;
 using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Authentication;
@@ -61,6 +62,9 @@ public static class IssuerEndpoints
 
     private static readonly string[] SubjectClaims = [Claims.Subject, ClaimTypes.NameIdentifier];
 
+    // amr as the host's scheme names it: as is, or under the name ASP.NET Core maps it to when it maps inbound claims.
+    private static readonly string[] MethodClaims = [Claims.AuthenticationMethodReference, "http://schemas.microsoft.com/claims/authnmethodsreferences"];
+
     /// <summary>
     /// Maps the authorization and the logout routes. Call it after <c>UseAuthentication()</c>, so that the host's
     /// scheme has read the person, and after <c>UseStellaegisActorAdmission()</c> when the host enables it.
@@ -107,6 +111,14 @@ public static class IssuerEndpoints
             identity.SetClaim(Claims.Email, email);
         if ((user.FindFirst(Claims.Name)?.Value ?? user.FindFirst(ClaimTypes.Name)?.Value ?? user.Identity.Name) is { } name)
             identity.SetClaim(Claims.Name, name);
+
+        // How the person proved who they are, as the session says (RFC 8176): a decision then asks whether a second
+        // factor was used for this session, not whether the account has one. A refresh keeps those of the login; the
+        // tokens write them as an array, AuthenticationMethodsHandler.
+        var methods = MethodClaims.SelectMany(type => user.FindAll(type)).Select(claim => claim.Value)
+            .Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.Ordinal).ToImmutableArray();
+        if (methods.Length > 0)
+            identity.SetClaims(Claims.AuthenticationMethodReference, methods);
 
         var requested = request.GetScopes();
         identity.SetScopes(requested);
@@ -161,11 +173,12 @@ public static class IssuerEndpoints
         }
     }
 
-    /// <summary>Where each claim goes: <c>sub</c> and <c>email</c> to both tokens, <c>name</c> to the identity token, nothing else anywhere — the token is compact.</summary>
+    /// <summary>Where each claim goes: <c>sub</c>, <c>email</c> and <c>amr</c> to both tokens, <c>name</c> to the identity token, nothing else anywhere — the token is compact.</summary>
     internal static IEnumerable<string> Destinations(Claim claim) => claim.Type switch
     {
         Claims.Subject => [OpenIddictConstants.Destinations.AccessToken, OpenIddictConstants.Destinations.IdentityToken],
         Claims.Email => [OpenIddictConstants.Destinations.AccessToken, OpenIddictConstants.Destinations.IdentityToken],
+        Claims.AuthenticationMethodReference => [OpenIddictConstants.Destinations.AccessToken, OpenIddictConstants.Destinations.IdentityToken],
         Claims.Name => [OpenIddictConstants.Destinations.IdentityToken],
         _ => [],
     };

@@ -116,6 +116,7 @@ public static class ServiceCollectionExtensions
 
                 server.AddEventHandler(ClientCredentialsTokenHandler.Descriptor);
                 server.AddEventHandler(RefreshAdmissionHandler.Descriptor);
+                server.AddEventHandler(AuthenticationMethodsHandler.Descriptor);
 
                 var aspnet = server.UseAspNetCore()
                     .EnableAuthorizationEndpointPassthrough()

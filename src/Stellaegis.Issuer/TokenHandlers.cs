@@ -72,3 +72,31 @@ internal sealed class RefreshAdmissionHandler(IActorAdmissions admissions, ILogg
         }
     }
 }
+
+/// <summary>
+/// Writes <c>amr</c> as a JSON array in the access and the identity tokens, even for one method, as OpenID Connect
+/// Core requires (§ 2): OpenIddict holds the methods as one claim per value, and writes a lone value as a string.
+/// </summary>
+internal sealed class AuthenticationMethodsHandler : IOpenIddictServerHandler<OpenIddictServerEvents.GenerateTokenContext>
+{
+    public static OpenIddictServerHandlerDescriptor Descriptor { get; }
+        = OpenIddictServerHandlerDescriptor.CreateBuilder<OpenIddictServerEvents.GenerateTokenContext>()
+            .UseSingletonHandler<AuthenticationMethodsHandler>()
+            .SetOrder(OpenIddictServerHandlers.Protection.GenerateIdentityModelToken.Descriptor.Order - 500)
+            .SetType(OpenIddictServerHandlerType.Custom)
+            .Build();
+
+    public ValueTask HandleAsync(OpenIddictServerEvents.GenerateTokenContext context)
+    {
+        if (context.TokenType is not (TokenTypeIdentifiers.AccessToken or TokenTypeIdentifiers.IdentityToken) || context.SecurityTokenDescriptor is not { } descriptor)
+            return default;
+        var methods = context.Principal.GetClaims(Claims.AuthenticationMethodReference);
+        if (methods.IsDefaultOrEmpty)
+            return default;
+
+        // The claims of the descriptor win over those of its subject, of the same type.
+        descriptor.Claims ??= new Dictionary<string, object>(StringComparer.Ordinal);
+        descriptor.Claims[Claims.AuthenticationMethodReference] = methods.ToArray();
+        return default;
+    }
+}

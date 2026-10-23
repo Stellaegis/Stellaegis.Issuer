@@ -20,7 +20,7 @@ public sealed class ResourceServerTests
     {
         await using var issuer = await IssuerTestHost.Builder().StartAsync(Ct);
         await issuer.DeclarePublicClientAsync(ct: Ct);
-        var (code, verifier) = await issuer.AuthorizeAsync("jane", ct: Ct);
+        var (code, verifier) = await issuer.AuthorizeAsync("jane", ct: Ct, amr: "pwd otp mfa");
         var tokens = await issuer.ExchangeCodeAsync(code, verifier, ct: Ct);
         await using var resource = await ResourceServerTestHost.StartAsync(issuer, Ct);
 
@@ -31,6 +31,7 @@ public sealed class ResourceServerTests
         Assert.Equal("jane", pong.Subject);
         Assert.Contains("documents", pong.Scopes);                                 // one claim per scope
         Assert.Contains("openid", pong.Scopes);
+        Assert.Equal(["mfa", "otp", "pwd"], pong.Methods.Order());                // one claim per method, under its own name
         Assert.Equal(HttpStatusCode.Unauthorized, (await resource.GetTestClient().GetAsync("/ping", Ct)).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await resource.ClientWithBearer("not.a.token").GetAsync("/ping", Ct)).StatusCode);
     }

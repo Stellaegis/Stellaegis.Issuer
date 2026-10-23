@@ -74,7 +74,8 @@ internal static class ResourceServerTestHost
         app.UseAuthorization();
         app.MapGet("/ping", (System.Security.Claims.ClaimsPrincipal user) => Results.Ok(new Pong(
                 user.FindFirst("sub")?.Value ?? "",
-                user.FindAll("scope").Select(claim => claim.Value).ToArray())))
+                user.FindAll("scope").Select(claim => claim.Value).ToArray(),
+                user.FindAll("amr").Select(claim => claim.Value).ToArray())))
             .RequireAuthorization();
         await app.StartAsync(ct);
         return app;
@@ -94,4 +95,4 @@ internal static class ResourceServerTestHost
     public static RevokedTokens RevokedTokens(this WebApplication app) => app.Services.GetRequiredService<RevokedTokens>();
 }
 
-internal sealed record Pong(string Subject, string[] Scopes);
+internal sealed record Pong(string Subject, string[] Scopes, string[] Methods);

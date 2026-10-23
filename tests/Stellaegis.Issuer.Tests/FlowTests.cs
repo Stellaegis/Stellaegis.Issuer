@@ -64,6 +64,28 @@ public sealed class FlowTests
     }
 
     [Fact]
+    public async Task How_the_person_proved_who_they_are_goes_into_both_tokens_and_survives_the_refresh()
+    {
+        await using var app = await IssuerTestHost.Builder().StartAsync(Ct);
+        await app.DeclarePublicClientAsync(ct: Ct);
+
+        var (code, verifier) = await app.AuthorizeAsync("jane", ct: Ct, amr: "pwd otp mfa");
+        var tokens = await app.ExchangeCodeAsync(code, verifier, ct: Ct);
+
+        string[] Methods(string jwt) => IssuerTestHost.Payload(jwt).GetProperty("amr").EnumerateArray().Select(value => value.GetString()!).Order().ToArray();
+        Assert.Equal(["mfa", "otp", "pwd"], Methods(tokens.AccessToken));
+        Assert.Equal(["mfa", "otp", "pwd"], Methods(tokens.IdToken));
+        var refreshed = await app.RefreshAsync(tokens.RefreshToken, ct: Ct);
+        Assert.Equal(["mfa", "otp", "pwd"], Methods(refreshed.AccessToken));   // those of the login, not of the refresh
+
+        // A single method is still an array (OpenID Connect Core § 2), and a session that says none gives none.
+        (code, verifier) = await app.AuthorizeAsync("john", ct: Ct, amr: "pwd");
+        Assert.Equal(["pwd"], Methods((await app.ExchangeCodeAsync(code, verifier, ct: Ct)).AccessToken));
+        (code, verifier) = await app.AuthorizeAsync("joe", ct: Ct);
+        Assert.False(IssuerTestHost.Payload((await app.ExchangeCodeAsync(code, verifier, ct: Ct)).AccessToken).TryGetProperty("amr", out _));
+    }
+
+    [Fact]
     public async Task A_code_without_its_verifier_is_refused()
     {
         await using var app = await IssuerTestHost.Builder().StartAsync(Ct);
