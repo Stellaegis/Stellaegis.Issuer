@@ -3,6 +3,7 @@
     <Project Path="src/Stellaegis.Issuer.Client/Stellaegis.Issuer.Client.csproj" />
     <Project Path="src/Stellaegis.Issuer.PostgreSQL/Stellaegis.Issuer.PostgreSQL.csproj" />
     <Project Path="src/Stellaegis.Issuer.Server/Stellaegis.Issuer.Server.csproj" />
+    <Project Path="src/Stellaegis.Issuer.SqlServer/Stellaegis.Issuer.SqlServer.csproj" />
     <Project Path="src/Stellaegis.Issuer/Stellaegis.Issuer.csproj" />
   </Folder>
   <Folder Name="/samples/">

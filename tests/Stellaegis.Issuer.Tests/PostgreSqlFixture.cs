@@ -22,14 +22,11 @@ public sealed class PostgreSqlCollection : ICollectionFixture<PostgreSqlFixture>
 /// —; the tests then connect under an ordinary role, <c>stellaegis_issuer_app</c>, created once, as an application
 /// does.
 /// </summary>
-public sealed class PostgreSqlFixture : IAsyncLifetime
+public sealed class PostgreSqlFixture : IIssuerDatabaseFixture
 {
     private const string Variable = "STELLAEGIS_TEST_POSTGRESQL";
     private const string Database = "stellaegis_issuer_tests";
     private const string AppRole = "stellaegis_issuer_app";
-
-    /// <summary>The frame the database is installed for: the issuer fits every frame, this one has no compartment.</summary>
-    public static readonly ApplicationFrame Frame = ApplicationFrame.WithoutCompartments;
 
     /// <summary>The connection string of the installer, which owns the schema; empty without the variable.</summary>
     public string AdminConnectionString { get; private set; } = string.Empty;
@@ -87,7 +84,7 @@ public sealed class PostgreSqlFixture : IAsyncLifetime
                 await reset.ExecuteNonQueryAsync();
             }
 
-            await DatabaseLifecycle.InstallAsync([IssuerDatabase.Value], Frame, (_, ct) => OpenAsync(asApplication: false, ct), AppRole, Actor.Job("tests"));
+            await DatabaseLifecycle.InstallAsync([IssuerDatabase.Value], IssuerStoreTests.Frame, (_, ct) => OpenAsync(asApplication: false, ct), AppRole, Actor.Job("tests"));
         }
         catch (NpgsqlException e)
         {

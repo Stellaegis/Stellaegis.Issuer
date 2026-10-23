@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Stellaegis.Issuer.SqlServer</RootNamespace>
+    <PackageId>Stellaegis.Issuer.SqlServer</PackageId>
+    <Description>The SQL Server stores of Stellaegis.Issuer: the OpenIddict applications, authorizations, scopes and tokens in the schema oidc, read and written by EF Core over Microsoft.Data.SqlClient at run time, with the declaration of the database — its schema as a script, never an EF Core migration — for its installation and its verification at startup.</Description>
+    <PackageTags>stellaegis;issuer;oidc;openiddict;sqlserver</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <!-- Pinned above the vulnerable versions the provider pulls in; see Directory.Packages.props -->
+    <PackageReference Include="System.Security.Cryptography.Pkcs" />
+    <PackageReference Include="System.Security.Cryptography.Xml" />
+    <PackageReference Include="Stellaegis.Primitives.Data" />
+    <ProjectReference Include="..\Stellaegis.Issuer\Stellaegis.Issuer.csproj" />
+    <InternalsVisibleTo Include="Stellaegis.Issuer.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Sql\**\*.sql" />
+  </ItemGroup>
+
+</Project>
