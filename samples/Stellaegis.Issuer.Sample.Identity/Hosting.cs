@@ -45,6 +45,12 @@ public sealed class LoggingMailer(ILogger<LoggingMailer> logger) : IIdentityMail
         return Task.CompletedTask;
     }
 
+    public Task SendActivationLinkAsync(string email, Uri link, TimeSpan lifetime, CancellationToken cancellationToken = default)
+    {
+        logger.LogWarning("MAIL to {Email}: activate your account at {Link}, valid for {Lifetime}", email, link, lifetime);
+        return Task.CompletedTask;
+    }
+
     public Task SendAccountAlreadyExistsAsync(string email, CancellationToken cancellationToken = default)
     {
         logger.LogWarning("MAIL to {Email}: someone tried to register this address, which has an account already", email);

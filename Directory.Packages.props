@@ -10,10 +10,10 @@
     <PackageVersion Include="Stellaegis.Primitives.AspNetCore" Version="5.2.0" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.13" />
     <!-- The accounts, for the example host that composes them with the issuer: packages, never a project reference -->
-    <PackageVersion Include="Stellaegis.Identity" Version="5.1.0" />
-    <PackageVersion Include="Stellaegis.Identity.PostgreSQL" Version="5.1.0" />
-    <PackageVersion Include="Stellaegis.Identity.AspNetCore" Version="5.1.0" />
-    <PackageVersion Include="Stellaegis.Identity.Server" Version="5.1.0" />
+    <PackageVersion Include="Stellaegis.Identity" Version="6.0.0" />
+    <PackageVersion Include="Stellaegis.Identity.PostgreSQL" Version="6.0.0" />
+    <PackageVersion Include="Stellaegis.Identity.AspNetCore" Version="6.0.0" />
+    <PackageVersion Include="Stellaegis.Identity.Server" Version="6.0.0" />
     <!-- The OpenID Connect issuer: OpenIddict over EF Core at run time; the schema is installed by scripts -->
     <PackageVersion Include="OpenIddict.AspNetCore" Version="7.7.2" />
     <PackageVersion Include="OpenIddict.EntityFrameworkCore" Version="7.7.2" />

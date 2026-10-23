@@ -19,16 +19,17 @@ otherwise. The installation is a verb of the first host, apart from serving:
 
 ```powershell
 cd samples/Stellaegis.Issuer.Sample.Identity
-dotnet run -- install --admin-email admin@acme.test --admin-password 'Correct-Horse-9'
+dotnet run -- install --admin-email admin@acme.test
 ```
 
 It creates the database `stellaegis_issuer_sample` and the role `issuer_sample_app` if missing, installs the
 schemas `ident` and `oidc` under the administration connection — one database, two schemas, one role: the example
-shares the instance, a deployment splits them by configuration alone —, creates the administrator, provisions the
+shares the instance, a deployment splits them by configuration alone —, creates the administrator without a
+password and prints its activation link, which is opened once the host runs to choose the password, provisions the
 credentials of the `inventory` module (its scope, its confidential client), creates the scope `issuer` and grants
 it to the inventory, declares the public client `desktop`, and re-applies what the configuration says of the
 clients: the secret of the inventory, the redirect URIs of the desktop (`Stellaegis:Issuer:Clients`). Run again, it
-changes nothing.
+changes nothing but a new link for an administrator still waiting for its activation.
 
 ⚠ Re-applying the secret of the inventory from the issuer's configuration is a shortcut for reproducibility, not the
 rule: the issuer keeps only the hash of a secret and has no business holding it in clear. In a deployment, `install`
@@ -76,6 +77,9 @@ curl.exe -s https://localhost:7112/api/issuer/scopes -H "Authorization: Bearer $
 # 4. A refresh.
 curl.exe -s https://localhost:7111/connect/token -d grant_type=refresh_token -d client_id=desktop -d refresh_token=$($tokens.refresh_token)
 ```
+
+The access token carries `amr`, how the person proved who they are (RFC 8176): `["pwd"]` after a password alone,
+`["pwd", "otp", "mfa"]` after a second factor — what a resource server asks when an operation requires one.
 
 The client `desktop` is declared *native*, and its redirect URI as `http://127.0.0.1/callback`: a loopback
 address, whose port the issuer ignores for a native client, so that the application listens on whatever port is

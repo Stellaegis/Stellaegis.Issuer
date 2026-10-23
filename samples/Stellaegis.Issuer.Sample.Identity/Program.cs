@@ -4,10 +4,11 @@
 // services apart their credentials. The second process, Stellaegis.Issuer.Sample.Inventory, is a resource server
 // that accepts those tokens.
 //
-//   dotnet run -- install --admin-email admin@acme.test --admin-password 'Correct-Horse-9'
+//   dotnet run -- install --admin-email admin@acme.test
 //       creates the database and the application's role if missing, installs the ident and oidc schemas under
-//       the administration connection, creates the first administrator, declares the public client of the
-//       desktop and provisions the credentials of the inventory module — the gestures of the installation.
+//       the administration connection, creates the first administrator without a password and prints its
+//       activation link, declares the public client of the desktop and provisions the credentials of the inventory
+//       module — the gestures of the installation.
 //   dotnet run
 //       verifies the installation under the application's role, then serves.
 //
