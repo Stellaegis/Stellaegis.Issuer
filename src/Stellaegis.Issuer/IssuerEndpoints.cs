@@ -16,8 +16,8 @@ namespace Stellaegis.Issuer;
 
 /// <summary>
 /// Maps the protocol routes of the issuer. The token route, <c>/connect/token</c>, is OpenIddict's own, served by
-/// the authentication pipeline; the two others are the issuer's: the authorization, which turns a person the host
-/// has authenticated into a code, and the logout.
+/// the authentication pipeline; the three others are the issuer's: the authorization, which turns a person the host
+/// has authenticated into a code, the user information, and the logout.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -26,8 +26,15 @@ namespace Stellaegis.Issuer;
 /// Negotiate —, and comes back once signed in. An authenticated person is first asked of every
 /// <c>IActorAdmission</c> registered — a blocked account is refused there, whatever the cookie says —: a refusal
 /// signs the person out of the scheme and sends the client <c>access_denied</c> with the reason. Then the principal
-/// is signed by OpenIddict with the claims <c>sub</c>, <c>email</c> and <c>name</c>, the scopes requested, and as
-/// audiences the resources of those scopes — a scope is the name of a module.
+/// is signed by OpenIddict with the claims <c>sub</c>, <c>email</c> and <c>name</c>, <c>amr</c>, and the profile the
+/// session carries — <c>locale</c>, <c>zoneinfo</c>, <c>picture</c> (OpenID Connect Core § 5.1) —, the scopes
+/// requested, and as audiences the resources of those scopes — a scope is the name of a module. A refresh keeps the
+/// claims of the login: a language changed reaches the tokens at the next one.
+/// </para>
+/// <para>
+/// At <c>/connect/userinfo</c>, the claims of the access token presented: <c>sub</c>, <c>email</c> under the scope
+/// <c>email</c>, <c>name</c> and the profile under <c>profile</c>. The issuer reads no account: what it answers is what
+/// the login put in the token.
 /// </para>
 /// <para>The routes are anonymous by nature and carry no operation: the client speaks with its own credentials.</para>
 /// <para>
@@ -60,19 +67,27 @@ public static class IssuerEndpoints
     /// <summary>The logout route, <c>/connect/logout</c>.</summary>
     public const string LogoutPath = "/connect/logout";
 
+    /// <summary>The user information route, <c>/connect/userinfo</c>.</summary>
+    public const string UserInfoPath = "/connect/userinfo";
+
+    // The profile a session may carry (OpenID Connect Core § 5.1), copied as is: the issuer checks none of it.
+    private static readonly string[] ProfileClaims = [Claims.Locale, Claims.Zoneinfo, Claims.Picture];
+
     private static readonly string[] SubjectClaims = [Claims.Subject, ClaimTypes.NameIdentifier];
 
     // amr as the host's scheme names it: as is, or under the name ASP.NET Core maps it to when it maps inbound claims.
     private static readonly string[] MethodClaims = [Claims.AuthenticationMethodReference, "http://schemas.microsoft.com/claims/authnmethodsreferences"];
 
     /// <summary>
-    /// Maps the authorization and the logout routes. Call it after <c>UseAuthentication()</c>, so that the host's
+    /// Maps the authorization, the user information and the logout routes. Call it after <c>UseAuthentication()</c>, so that the host's
     /// scheme has read the person, and after <c>UseStellaegisActorAdmission()</c> when the host enables it.
     /// </summary>
     public static IEndpointRouteBuilder MapStellaegisIssuer(this IEndpointRouteBuilder endpoints)
     {
         Guard.NotNull(endpoints);
         endpoints.MapGet(AuthorizePath, AuthorizeAsync).AllowAnonymous();
+        // Cast: a handler taking the HttpContext alone would be read as a RequestDelegate, its result discarded.
+        endpoints.MapMethods(UserInfoPath, [HttpMethods.Get, HttpMethods.Post], (Func<HttpContext, Task<IResult>>)UserInfoAsync).AllowAnonymous();
         endpoints.MapMethods(LogoutPath, [HttpMethods.Get, HttpMethods.Post], LogoutAsync).AllowAnonymous();
         return endpoints;
     }
@@ -111,6 +126,11 @@ public static class IssuerEndpoints
             identity.SetClaim(Claims.Email, email);
         if ((user.FindFirst(Claims.Name)?.Value ?? user.FindFirst(ClaimTypes.Name)?.Value ?? user.Identity.Name) is { } name)
             identity.SetClaim(Claims.Name, name);
+        foreach (var type in ProfileClaims)
+        {
+            if (user.FindFirst(type)?.Value is { Length: > 0 } value)
+                identity.SetClaim(type, value);
+        }
 
         // How the person proved who they are, as the session says (RFC 8176): a decision then asks whether a second
         // factor was used for this session, not whether the account has one. A refresh keeps those of the login; the
@@ -128,6 +148,33 @@ public static class IssuerEndpoints
         identity.SetDestinations(Destinations);
 
         return Results.SignIn(new ClaimsPrincipal(identity), authenticationScheme: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+    }
+
+    private static async Task<IResult> UserInfoAsync(HttpContext http)
+    {
+        // OpenIddict validated the access token before this handler runs; its principal is the token's.
+        var authenticated = await http.AuthenticateAsync(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+        if (authenticated.Principal is not { } principal || principal.GetClaim(Claims.Subject) is not { } subject)
+        {
+            return Results.Challenge(new AuthenticationProperties(new Dictionary<string, string?>
+            {
+                [OpenIddictServerAspNetCoreConstants.Properties.Error] = Errors.InvalidToken,
+                [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = "The access token does not name a person.",
+            }), [OpenIddictServerAspNetCoreDefaults.AuthenticationScheme]);
+        }
+
+        var claims = new Dictionary<string, string>(StringComparer.Ordinal) { [Claims.Subject] = subject };
+        if (principal.HasScope(Scopes.Email) && principal.GetClaim(Claims.Email) is { } email)
+            claims[Claims.Email] = email;
+        if (principal.HasScope(Scopes.Profile))
+        {
+            foreach (var type in ProfileClaims.Prepend(Claims.Name))
+            {
+                if (principal.GetClaim(type) is { } value)
+                    claims[type] = value;
+            }
+        }
+        return Results.Ok(claims);
     }
 
     private static async Task<IResult> LogoutAsync(HttpContext http, IOptions<IssuerOptions> options)
@@ -173,13 +220,17 @@ public static class IssuerEndpoints
         }
     }
 
-    /// <summary>Where each claim goes: <c>sub</c>, <c>email</c> and <c>amr</c> to both tokens, <c>name</c> to the identity token, nothing else anywhere — the token is compact.</summary>
+    /// <summary>
+    /// Where each claim goes: <c>sub</c>, <c>email</c>, <c>amr</c>, <c>name</c> and the profile to both tokens, nothing
+    /// else anywhere — the token stays compact. The access token carries the name and the profile because the user
+    /// information answers from it, and because an API that renders a date or a name for nobody in front of it — a
+    /// PDF, an e-mail — reads that token alone.
+    /// </summary>
     internal static IEnumerable<string> Destinations(Claim claim) => claim.Type switch
     {
-        Claims.Subject => [OpenIddictConstants.Destinations.AccessToken, OpenIddictConstants.Destinations.IdentityToken],
-        Claims.Email => [OpenIddictConstants.Destinations.AccessToken, OpenIddictConstants.Destinations.IdentityToken],
-        Claims.AuthenticationMethodReference => [OpenIddictConstants.Destinations.AccessToken, OpenIddictConstants.Destinations.IdentityToken],
-        Claims.Name => [OpenIddictConstants.Destinations.IdentityToken],
+        Claims.Subject or Claims.Email or Claims.AuthenticationMethodReference or Claims.Name
+            or Claims.Locale or Claims.Zoneinfo or Claims.Picture
+            => [OpenIddictConstants.Destinations.AccessToken, OpenIddictConstants.Destinations.IdentityToken],
         _ => [],
     };
 }

@@ -88,6 +88,8 @@ internal sealed class HeaderAuthentication(IOptionsMonitor<AuthenticationSchemeO
             claims.Add(new Claim("email", email.ToString()));
         if (Request.Headers.TryGetValue("X-Name", out var name))
             claims.Add(new Claim("name", name.ToString()));
+        foreach (var header in Request.Headers.Where(header => header.Key.StartsWith("X-Profile-", StringComparison.OrdinalIgnoreCase)))
+            claims.Add(new Claim(header.Key["X-Profile-".Length..].ToLowerInvariant(), header.Value.ToString()));
         if (Request.Headers.TryGetValue("X-Amr", out var methods))
             claims.AddRange(methods.ToString().Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(method => new Claim("amr", method)));
         claims.AddRange(grants.Select(grant => new Claim(GrantClaim, grant)));
@@ -210,7 +212,8 @@ internal static class IssuerTestHost
 
     public static RefusingSubjects Refusing(this WebApplication app) => app.Services.GetRequiredService<RefusingSubjects>();
 
-    public static HttpClient ClientAs(this WebApplication app, string? subject, string? email = null, string? name = null, string? amr = null)
+    public static HttpClient ClientAs(this WebApplication app, string? subject, string? email = null, string? name = null, string? amr = null,
+        IReadOnlyDictionary<string, string>? profile = null)
     {
         var client = app.GetTestClient();
         if (subject is not null)
@@ -221,6 +224,8 @@ internal static class IssuerTestHost
             client.DefaultRequestHeaders.Add("X-Name", name);
         if (amr is not null)
             client.DefaultRequestHeaders.Add("X-Amr", amr);
+        foreach (var (type, value) in profile ?? new Dictionary<string, string>())
+            client.DefaultRequestHeaders.Add("X-Profile-" + type, value);
         return client;
     }
 
@@ -245,11 +250,12 @@ internal static class IssuerTestHost
         });
 
     /// <summary>Walks the authorization for <paramref name="subject"/> and returns the code of the redirect.</summary>
-    public static async Task<(string Code, string Verifier)> AuthorizeAsync(this WebApplication app, string subject, string clientId = "desktop", CancellationToken ct = default, string? amr = null)
+    public static async Task<(string Code, string Verifier)> AuthorizeAsync(this WebApplication app, string subject, string clientId = "desktop", CancellationToken ct = default, string? amr = null,
+        IReadOnlyDictionary<string, string>? profile = null, string? scope = null)
     {
         var (verifier, challenge) = Pkce();
-        using var client = app.ClientAs(subject, email: $"{subject}@acme.test", name: subject, amr: amr);
-        var response = await client.GetAsync(AuthorizeUrl(clientId, challenge), ct);
+        using var client = app.ClientAs(subject, email: $"{subject}@acme.test", name: subject, amr: amr, profile: profile);
+        var response = await client.GetAsync(scope is null ? AuthorizeUrl(clientId, challenge) : AuthorizeUrl(clientId, challenge, scope), ct);
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
         var location = response.Headers.Location!;
         Assert.StartsWith(RedirectUri, location.ToString());

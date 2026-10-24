@@ -84,7 +84,8 @@ public static class ServiceCollectionExtensions
 
                 server.SetAuthorizationEndpointUris(IssuerEndpoints.AuthorizePath)
                     .SetTokenEndpointUris(IssuerEndpoints.TokenPath)
-                    .SetEndSessionEndpointUris(IssuerEndpoints.LogoutPath);
+                    .SetEndSessionEndpointUris(IssuerEndpoints.LogoutPath)
+                    .SetUserInfoEndpointUris(IssuerEndpoints.UserInfoPath);
 
                 server.AllowAuthorizationCodeFlow().RequireProofKeyForCodeExchange()
                     .AllowClientCredentialsFlow()
@@ -120,6 +121,7 @@ public static class ServiceCollectionExtensions
 
                 var aspnet = server.UseAspNetCore()
                     .EnableAuthorizationEndpointPassthrough()
+                    .EnableUserInfoEndpointPassthrough()
                     .EnableEndSessionEndpointPassthrough();
                 if (!options.RequireHttps)
                     aspnet.DisableTransportSecurityRequirement();

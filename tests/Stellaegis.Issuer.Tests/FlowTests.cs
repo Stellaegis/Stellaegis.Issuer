@@ -52,7 +52,7 @@ public sealed class FlowTests
         Assert.Equal("jane", access.GetProperty("sub").GetString());
         Assert.Equal("jane@acme.test", access.GetProperty("email").GetString());
         Assert.Equal("documents", Audiences(access).Single());
-        Assert.False(access.TryGetProperty("name", out _));           // the name goes to the identity token only
+        Assert.Equal("jane", access.GetProperty("name").GetString());   // the user information answers from this token
         Assert.NotEmpty(access.GetProperty("oi_tkn_id").GetString()!);
         var id = IssuerTestHost.Payload(tokens.IdToken);
         Assert.Equal("jane", id.GetProperty("name").GetString());
@@ -83,6 +83,74 @@ public sealed class FlowTests
         Assert.Equal(["pwd"], Methods((await app.ExchangeCodeAsync(code, verifier, ct: Ct)).AccessToken));
         (code, verifier) = await app.AuthorizeAsync("joe", ct: Ct);
         Assert.False(IssuerTestHost.Payload((await app.ExchangeCodeAsync(code, verifier, ct: Ct)).AccessToken).TryGetProperty("amr", out _));
+    }
+
+    private static readonly Dictionary<string, string> Profile = new()
+    {
+        ["locale"] = "fr",
+        ["zoneinfo"] = "Europe/Paris",
+        ["picture"] = "https://id.acme.test/account/avatar?v=1",
+    };
+
+    [Fact]
+    public async Task The_profile_of_the_session_goes_into_both_tokens_and_survives_the_refresh()
+    {
+        await using var app = await IssuerTestHost.Builder().StartAsync(Ct);
+        await app.DeclarePublicClientAsync(ct: Ct);
+
+        var (code, verifier) = await app.AuthorizeAsync("jane", ct: Ct, profile: Profile);
+        var tokens = await app.ExchangeCodeAsync(code, verifier, ct: Ct);
+
+        foreach (var jwt in new[] { tokens.AccessToken, tokens.IdToken })
+        {
+            var payload = IssuerTestHost.Payload(jwt);
+            Assert.Equal("fr", payload.GetProperty("locale").GetString());
+            Assert.Equal("Europe/Paris", payload.GetProperty("zoneinfo").GetString());
+            Assert.Equal("https://id.acme.test/account/avatar?v=1", payload.GetProperty("picture").GetString());
+            Assert.Equal("jane", payload.GetProperty("name").GetString());
+        }
+        var refreshed = await app.RefreshAsync(tokens.RefreshToken, ct: Ct);
+        Assert.Equal("Europe/Paris", IssuerTestHost.Payload(refreshed.AccessToken).GetProperty("zoneinfo").GetString());
+
+        // A session that carries no profile gives none.
+        (code, verifier) = await app.AuthorizeAsync("john", ct: Ct);
+        var plain = IssuerTestHost.Payload((await app.ExchangeCodeAsync(code, verifier, ct: Ct)).AccessToken);
+        Assert.False(plain.TryGetProperty("locale", out _));
+        Assert.False(plain.TryGetProperty("picture", out _));
+    }
+
+    [Fact]
+    public async Task The_user_information_answers_the_claims_of_the_access_token_under_their_scopes()
+    {
+        await using var app = await IssuerTestHost.Builder().StartAsync(Ct);
+        await app.DeclarePublicClientAsync(ct: Ct);
+        using var anonymous = app.GetTestClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync(IssuerEndpoints.UserInfoPath, Ct)).StatusCode);
+
+        var (code, verifier) = await app.AuthorizeAsync("jane", ct: Ct, profile: Profile);
+        var full = await UserInfoAsync(app, (await app.ExchangeCodeAsync(code, verifier, ct: Ct)).AccessToken);
+        Assert.Equal("jane", full.GetProperty("sub").GetString());
+        Assert.Equal("jane@acme.test", full.GetProperty("email").GetString());
+        Assert.Equal("jane", full.GetProperty("name").GetString());
+        Assert.Equal("fr", full.GetProperty("locale").GetString());
+        Assert.Equal("Europe/Paris", full.GetProperty("zoneinfo").GetString());
+        Assert.Equal("https://id.acme.test/account/avatar?v=1", full.GetProperty("picture").GetString());
+
+        (code, verifier) = await app.AuthorizeAsync("jane", ct: Ct, profile: Profile, scope: "openid documents");
+        var bare = await UserInfoAsync(app, (await app.ExchangeCodeAsync(code, verifier, ct: Ct)).AccessToken);
+        Assert.Equal("jane", bare.GetProperty("sub").GetString());
+        Assert.False(bare.TryGetProperty("email", out _));
+        Assert.False(bare.TryGetProperty("name", out _));
+        Assert.False(bare.TryGetProperty("locale", out _));
+    }
+
+    private static async Task<System.Text.Json.JsonElement> UserInfoAsync(Microsoft.AspNetCore.Builder.WebApplication app, string accessToken)
+    {
+        using var client = app.GetTestClient();
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+        var response = await client.GetAsync(IssuerEndpoints.UserInfoPath, Ct);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        return System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync(Ct)).RootElement;
     }
 
     [Fact]
