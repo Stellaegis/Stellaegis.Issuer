@@ -7,6 +7,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [5.3.0] — 2026-10-24
+
+### Added
+
+- The profile of the session in the tokens: `locale`, `zoneinfo` and `picture` (OpenID Connect Core § 5.1), copied
+  from the host's session when it carries them, checked by nothing here. `Stellaegis.Identity` 6.1.0 writes them. A
+  refresh keeps those of the login.
+- `/connect/userinfo`, `IssuerEndpoints.UserInfoPath`: the claims of the access token presented — `sub`, `email`
+  under the scope `email`, `name` and the profile under `profile`.
+
+### Changed
+
+- `name` goes to the access token too, as the profile does: the user information answers from that token, and an
+  API that renders a name for nobody in front of it reads it alone. The token grows by these few claims.
+
 ## [5.2.0] — 2026-10-23
 
 ### Added

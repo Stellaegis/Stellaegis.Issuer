@@ -139,10 +139,11 @@ Three, as OpenIddict serves them on `/connect/token`, with PKCE required of ever
 
 | Flow | Who | What the token carries |
 | --- | --- | --- |
-| Authorization code with PKCE, then refresh | a person, through a browser or a native application | `sub` the person's id, `email`, `amr` how they proved it; `name` in the identity token only; the scopes requested; as audiences the resources of those scopes |
+| Authorization code with PKCE, then refresh | a person, through a browser or a native application | `sub` the person's id, `email`, `name`, `amr` how they proved it, and the profile the session carries — `locale`, `zoneinfo`, `picture`; the scopes requested; as audiences the resources of those scopes |
 | Client credentials | a service, with the secret the installation gave it | `sub` the client id; the scopes requested, and their resources as audiences |
 
-The token is compact: `sub`, `email`, `amr`, scopes, audiences, nothing else — no tenant, no permission; the rights
+The token is compact: `sub`, `email`, `name`, `amr`, the profile, scopes, audiences, nothing else — no tenant, no
+permission; the rights
 are decided at every call, by `Stellaegis.Access`, so that revoking one is immediate. A scope is the name of a
 module, and the audience of a token carrying it is the same name: a resource server accepts the tokens of its
 modules.
@@ -152,6 +153,16 @@ host's session — `Stellaegis.Identity` 6.0.0 writes `pwd`, then `otp` and `mfa
 asks whether a second factor was used for this session, not whether the account has one. The claim is a JSON array
 even for one method, as OpenID Connect Core requires; a refresh keeps the methods of the login, since it proves
 nothing anew; a session whose scheme says none gives a token without `amr`.
+
+`locale`, `zoneinfo` and `picture` (OpenID Connect Core § 5.1) are copied from the host's session when it carries
+them — `Stellaegis.Identity` 6.1.0 writes the language and the time zone the person chose, and the address of their
+avatar when the host declares it. The issuer checks none of them. They go to both tokens, with `name`: an API that
+renders a date or a name for nobody in front of it — a PDF, an e-mail — reads the access token alone. A refresh keeps
+those of the login: a language changed reaches the tokens at the next one.
+
+`/connect/userinfo` answers the claims of the access token presented, as OpenID Connect Core § 5.3 describes: `sub`,
+`email` under the scope `email`, `name` and the profile under `profile`; 401 without a valid token. The issuer reads
+no account: what it answers is what the login put in the token.
 
 `/connect/authorize` takes a person **the host has authenticated**: a stranger is challenged on the host's scheme
 — `AuthenticationScheme` in the options, or the host's default — and comes back signed in; a person signed in is
