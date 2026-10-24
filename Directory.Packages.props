@@ -4,10 +4,10 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- Stellaegis: the Microsoft.Extensions abstractions come with Stellaegis.Primitives.Hosting -->
-    <PackageVersion Include="Stellaegis.Primitives" Version="5.2.0" />
-    <PackageVersion Include="Stellaegis.Primitives.Hosting" Version="5.2.0" />
-    <PackageVersion Include="Stellaegis.Primitives.Data" Version="5.2.0" />
-    <PackageVersion Include="Stellaegis.Primitives.AspNetCore" Version="5.2.0" />
+    <PackageVersion Include="Stellaegis.Primitives" Version="5.4.0" />
+    <PackageVersion Include="Stellaegis.Primitives.Hosting" Version="5.4.0" />
+    <PackageVersion Include="Stellaegis.Primitives.Data" Version="5.4.0" />
+    <PackageVersion Include="Stellaegis.Primitives.AspNetCore" Version="5.4.0" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.13" />
     <!-- The accounts, for the example host that composes them with the issuer: packages, never a project reference -->
     <PackageVersion Include="Stellaegis.Identity" Version="6.0.0" />
