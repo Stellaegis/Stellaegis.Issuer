@@ -255,4 +255,75 @@ public sealed class FlowTests
         var aud = payload.GetProperty("aud");
         return aud.ValueKind == JsonValueKind.Array ? aud.EnumerateArray().Select(a => a.GetString()!) : [aud.GetString()!];
     }
+
+    [Fact]
+    public async Task The_time_of_the_login_goes_into_both_tokens_as_a_number_and_survives_the_refresh()
+    {
+        await using var app = await IssuerTestHost.Builder().StartAsync(Ct);
+        await app.DeclarePublicClientAsync(ct: Ct);
+        var signedInAt = DateTimeOffset.UtcNow.AddMinutes(-20).ToUnixTimeSeconds();
+
+        var (code, verifier) = await app.AuthorizeAsync("jane", ct: Ct, profile: new Dictionary<string, string> { ["auth_time"] = signedInAt.ToString() });
+        var tokens = await app.ExchangeCodeAsync(code, verifier, ct: Ct);
+
+        Assert.Equal(signedInAt, IssuerTestHost.Payload(tokens.AccessToken).GetProperty("auth_time").GetInt64());
+        Assert.Equal(signedInAt, IssuerTestHost.Payload(tokens.IdToken).GetProperty("auth_time").GetInt64());
+        var refreshed = await app.RefreshAsync(tokens.RefreshToken, ct: Ct);
+        Assert.Equal(signedInAt, IssuerTestHost.Payload(refreshed.AccessToken).GetProperty("auth_time").GetInt64());   // the login's, not the refresh's
+
+        (code, verifier) = await app.AuthorizeAsync("john", ct: Ct);
+        Assert.False(IssuerTestHost.Payload((await app.ExchangeCodeAsync(code, verifier, ct: Ct)).AccessToken).TryGetProperty("auth_time", out _));
+    }
+
+    [Fact]
+    public async Task Prompt_login_closes_the_open_session_and_sends_the_person_to_sign_in_on_a_way_back_that_no_longer_asks_it()
+    {
+        await using var app = await IssuerTestHost.Builder().StartAsync(Ct);
+        await app.DeclarePublicClientAsync(ct: Ct);
+        var (_, challenge) = IssuerTestHost.Pkce();
+        var authorize = IssuerTestHost.AuthorizeUrl("desktop", challenge);
+        using var jane = app.ClientAs("jane");
+
+        var signOuts = app.SignOuts();
+        var asked = await jane.GetAsync(QueryHelpers.AddQueryString(authorize, "prompt", "login"), Ct);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, asked.StatusCode);
+        Assert.Equal(signOuts + 1, app.SignOuts());
+        Assert.Equal(authorize, asked.Headers.GetValues("X-Return").Single());
+
+        // Back from the login, the way back no longer asks it: the code is given.
+        var back = await jane.GetAsync(authorize, Ct);
+        Assert.Equal(HttpStatusCode.Redirect, back.StatusCode);
+        Assert.True(QueryHelpers.ParseQuery(back.Headers.Location!.Query).ContainsKey("code"));
+    }
+
+    [Fact]
+    public async Task Max_age_is_answered_by_a_recent_login_and_asks_again_one_older_or_one_that_does_not_say_its_time()
+    {
+        await using var app = await IssuerTestHost.Builder().StartAsync(Ct);
+        await app.DeclarePublicClientAsync(ct: Ct);
+        var (_, challenge) = IssuerTestHost.Pkce();
+        var authorize = IssuerTestHost.AuthorizeUrl("desktop", challenge);
+        var asking = QueryHelpers.AddQueryString(authorize, "max_age", "600");
+
+        HttpClient Session(long? minutesAgo) => app.ClientAs("jane", profile: minutesAgo is { } ago
+            ? new Dictionary<string, string> { ["auth_time"] = DateTimeOffset.UtcNow.AddMinutes(-ago).ToUnixTimeSeconds().ToString() }
+            : null);
+
+        using (var recent = Session(2))
+        {
+            var answered = await recent.GetAsync(asking, Ct);
+            Assert.Equal(HttpStatusCode.Redirect, answered.StatusCode);
+            Assert.True(QueryHelpers.ParseQuery(answered.Headers.Location!.Query).ContainsKey("code"));
+        }
+        foreach (var minutesAgo in new long?[] { 30, null })
+        {
+            using var session = Session(minutesAgo);
+            var signOuts = app.SignOuts();
+            var asked = await session.GetAsync(asking, Ct);
+            Assert.Equal(HttpStatusCode.Unauthorized, asked.StatusCode);
+            Assert.Equal(signOuts + 1, app.SignOuts());
+            Assert.Equal(authorize, asked.Headers.GetValues("X-Return").Single());
+        }
+    }
 }

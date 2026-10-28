@@ -110,6 +110,15 @@ internal sealed class HeaderAuthentication(IOptionsMonitor<AuthenticationSchemeO
         signOuts.Add();
         return Task.CompletedTask;
     }
+
+    /// <summary>A 401, and in <c>X-Return</c> the way back a cookie would put in its redirect to the login.</summary>
+    protected override Task HandleChallengeAsync(AuthenticationProperties properties)
+    {
+        Response.StatusCode = (int)HttpStatusCode.Unauthorized;
+        if (properties.RedirectUri is { } back)
+            Response.Headers["X-Return"] = back;
+        return Task.CompletedTask;
+    }
 }
 
 /// <summary>

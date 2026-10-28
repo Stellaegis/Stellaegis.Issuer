@@ -1,10 +1,12 @@
 using System.Collections.Immutable;
+using System.Globalization;
 using System.Security.Claims;
 using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Options;
 using OpenIddict.Abstractions;
 using OpenIddict.Server.AspNetCore;
@@ -92,7 +94,8 @@ public static class IssuerEndpoints
         return endpoints;
     }
 
-    private static async Task<IResult> AuthorizeAsync(HttpContext http, IOpenIddictScopeManager scopes, IActorAdmissions admissions, IOptions<IssuerOptions> options, CancellationToken ct)
+    private static async Task<IResult> AuthorizeAsync(
+        HttpContext http, IOpenIddictScopeManager scopes, IActorAdmissions admissions, IOptions<IssuerOptions> options, TimeProvider clock, CancellationToken ct)
     {
         var request = http.GetOpenIddictServerRequest()
             ?? throw new InvalidOperationException("The OpenID Connect request was not read: the authorization route is served without the OpenIddict server.");
@@ -108,6 +111,16 @@ public static class IssuerEndpoints
 
         if (user.Identity?.IsAuthenticated != true)
             return Challenge(http, scheme);
+
+        // A login asked again — prompt=login, or a max_age the login of the session is older than, or does not say the
+        // time of: the session is closed and the person sent to sign in, on a way back that no longer asks it.
+        var authenticatedAt = AuthenticationTime(user);
+        if (request.HasPromptValue(PromptValues.Login)
+            || request.MaxAge is { } maxAge && (authenticatedAt is not { } at || clock.GetUtcNow() - at > TimeSpan.FromSeconds(maxAge)))
+        {
+            await TrySignOutAsync(http, scheme);
+            return Challenge(http, scheme);
+        }
 
         var admitted = await admissions.AdmitAsync(user, ct);
         if (admitted.IsFailure)
@@ -139,6 +152,9 @@ public static class IssuerEndpoints
             .Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.Ordinal).ToImmutableArray();
         if (methods.Length > 0)
             identity.SetClaims(Claims.AuthenticationMethodReference, methods);
+        // When, as the session says it: a refresh keeps the time of the login, as it keeps its methods.
+        if (authenticatedAt is { } time)
+            identity.AddClaim(new Claim(Claims.AuthenticationTime, time.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Integer64));
 
         var requested = request.GetScopes();
         identity.SetScopes(requested);
@@ -188,11 +204,26 @@ public static class IssuerEndpoints
     /// <summary>The authentication type of the identities OpenIddict signs, what its own handlers use.</summary>
     private const string TokenValidationParametersAuthenticationType = "AuthenticationTypes.Federation";
 
+    /// <summary>
+    /// Sends the person to sign in on the host's scheme, coming back to this authorization without what it asked of
+    /// the login — <c>prompt</c>, <c>max_age</c> —: the login just done answers it, and asking it again would send the
+    /// person round, the more so on a scheme that says no <c>auth_time</c>.
+    /// </summary>
     private static IResult Challenge(HttpContext http, string? scheme)
     {
-        var properties = new AuthenticationProperties { RedirectUri = http.Request.PathBase + http.Request.Path + http.Request.QueryString };
+        var query = QueryHelpers.ParseQuery(http.Request.QueryString.Value)
+            .Where(parameter => parameter.Key is not (Parameters.Prompt or Parameters.MaxAge))
+            .SelectMany(parameter => parameter.Value.Select(value => KeyValuePair.Create(parameter.Key, value)));
+        var properties = new AuthenticationProperties { RedirectUri = http.Request.PathBase + http.Request.Path + QueryString.Create(query) };
         return scheme is null ? Results.Challenge(properties) : Results.Challenge(properties, [scheme]);
     }
+
+    /// <summary>When the person of the session authenticated, its <c>auth_time</c> in seconds since the epoch; <see langword="null"/> when the session does not say.</summary>
+    private static DateTimeOffset? AuthenticationTime(ClaimsPrincipal user)
+        => long.TryParse(user.FindFirst(Claims.AuthenticationTime)?.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var seconds)
+            && seconds <= DateTimeOffset.MaxValue.ToUnixTimeSeconds()
+            ? DateTimeOffset.FromUnixTimeSeconds(seconds)
+            : null;
 
     private static IResult Forbid(string error, string description)
     {
@@ -228,7 +259,7 @@ public static class IssuerEndpoints
     /// </summary>
     internal static IEnumerable<string> Destinations(Claim claim) => claim.Type switch
     {
-        Claims.Subject or Claims.Email or Claims.AuthenticationMethodReference or Claims.Name
+        Claims.Subject or Claims.Email or Claims.AuthenticationMethodReference or Claims.AuthenticationTime or Claims.Name
             or Claims.Locale or Claims.Zoneinfo or Claims.Picture
             => [OpenIddictConstants.Destinations.AccessToken, OpenIddictConstants.Destinations.IdentityToken],
         _ => [],
