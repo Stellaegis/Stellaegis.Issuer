@@ -7,6 +7,35 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [5.4.0] — 2026-10-28
+
+What the application asks of the login. The authorization served any open session without a page, whatever the
+request said: an application could not have the login asked again, nor know when it was done.
+
+### Added
+
+- **`prompt` and `max_age`**, OpenID Connect Core § 3.1.2.1: `login` and a `max_age` the login is older than sign the
+  session out and ask the login; `select_account` shows the open session on the login page; `none` answers or says
+  `login_required`.
+- **`auth_time`** in the access and the identity tokens, as a number, copied from the host's session;
+  `Stellaegis.Identity` 6.3.0 writes it. A refresh keeps the login's.
+- **`ClientPrompt`**, `ClientDefinition.Prompt` and `OidcClient.Prompt`: what the authorization asks of the login for
+  a client whose request says nothing — `Silent`, `SelectAccount`, `Login` —, kept in the properties of its
+  application, with no schema change.
+- **`stellaegis_prompted`**, `IssuerEndpoints.PromptedParameter`: the mark of the way back from the login, protected
+  and bound to its request. `AddStellaegisIssuer` registers the data protection.
+
+### Changed
+
+- The example host takes `Stellaegis.Identity` 6.3.0 and declares `AvatarUrl`: `picture` and `auth_time` in its tokens.
+
+### Updating from 5.3.0
+
+1. **Nothing to install**: the schema is unchanged.
+2. **A request with `prompt=login` or `max_age`**, which was answered without a page, now asks the login.
+3. **Several instances of a host** share their data-protection keys, or a way back from the login reaching another
+   instance asks the login again.
+
 ## [5.3.0] — 2026-10-24
 
 ### Added

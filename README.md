@@ -139,10 +139,10 @@ Three, as OpenIddict serves them on `/connect/token`, with PKCE required of ever
 
 | Flow | Who | What the token carries |
 | --- | --- | --- |
-| Authorization code with PKCE, then refresh | a person, through a browser or a native application | `sub` the person's id, `email`, `name`, `amr` how they proved it, and the profile the session carries — `locale`, `zoneinfo`, `picture`; the scopes requested; as audiences the resources of those scopes |
+| Authorization code with PKCE, then refresh | a person, through a browser or a native application | `sub` the person's id, `email`, `name`, `amr` how they proved it and `auth_time` when, and the profile the session carries — `locale`, `zoneinfo`, `picture`; the scopes requested; as audiences the resources of those scopes |
 | Client credentials | a service, with the secret the installation gave it | `sub` the client id; the scopes requested, and their resources as audiences |
 
-The token is compact: `sub`, `email`, `name`, `amr`, the profile, scopes, audiences, nothing else — no tenant, no
+The token is compact: `sub`, `email`, `name`, `amr`, `auth_time`, the profile, scopes, audiences, nothing else — no tenant, no
 permission; the rights
 are decided at every call, by `Stellaegis.Access`, so that revoking one is immediate. A scope is the name of a
 module, and the audience of a token carrying it is the same name: a resource server accepts the tokens of its
@@ -153,6 +153,10 @@ host's session — `Stellaegis.Identity` 6.0.0 writes `pwd`, then `otp` and `mfa
 asks whether a second factor was used for this session, not whether the account has one. The claim is a JSON array
 even for one method, as OpenID Connect Core requires; a refresh keeps the methods of the login, since it proves
 nothing anew; a session whose scheme says none gives a token without `amr`.
+
+`auth_time` says when, in seconds since the epoch, copied from the `auth_time` claim of the host's session —
+`Stellaegis.Identity` 6.3.0 writes the time of the login and keeps it for the whole session. It goes to both tokens
+as a number, and a refresh keeps the login's. A session whose scheme says none gives a token without `auth_time`.
 
 `locale`, `zoneinfo` and `picture` (OpenID Connect Core § 5.1) are copied from the host's session when it carries
 them — `Stellaegis.Identity` 6.1.0 writes the language and the time zone the person chose, and the address of their
@@ -168,7 +172,24 @@ no account: what it answers is what the login put in the token.
 — `AuthenticationScheme` in the options, or the host's default — and comes back signed in; a person signed in is
 first asked of every `IActorAdmission` registered — a blocked account is refused there, whatever the cookie says —,
 a refusal signs them out and sends the client `access_denied` with the reason. The refresh asks the admissions
-again, and answers `invalid_grant` when they refuse. The routes are Minimal API: the host maps them with
+again, and answers `invalid_grant` when they refuse.
+
+What the application asks of the login, OpenID Connect Core § 3.1.2.1, is followed:
+
+| The request says | The authorization |
+| --- | --- |
+| nothing | answers an open session without a page — or does what the client declared, below |
+| `prompt=login` | signs the session out of the host's scheme and sends the person to sign in |
+| `max_age` | the same, when the login of the session is older than it, or the session says no `auth_time` |
+| `prompt=select_account` | sends the open session to the login page without closing it: the pages of `Stellaegis.Identity` 6.2.0 show it, to continue or switch account |
+| `prompt=none` | shows no page: an open session is answered, and `login_required` goes to the application where a login would be asked |
+
+The way back from the login drops `prompt` and `max_age` — the login just done answers them — and carries
+`stellaegis_prompted`, a mark protected by the host's data protection for ten minutes and bound to the request: its
+client, redirect URI, PKCE challenge and state. Back from the login, what was asked of it is answered, so that a
+client's own posture, which no request carries, does not send the person round; a mark forged, expired or taken
+from another authorization answers nothing. Several instances of a host share their data-protection keys, as they
+do for the cookie. The routes are Minimal API: the host maps them with
 `MapStellaegisIssuer()`, after `UseAuthentication()`, and needs no MVC.
 
 ⚠ The door of Primitives, `UseStellaegisActorAdmission()`, refuses a blocked person with 401 before the
@@ -216,6 +237,12 @@ scopes, nothing of its own. A client is **public** — a browser application, it
 What is specific to an environment — a secret, the redirect URIs — may be left out of the declaration: the catalog
 then takes it from `Stellaegis:Issuer:Clients`, and `ApplyConfiguredClientsAsync()` re-applies it to the clients
 already declared, which the installation calls after a configuration changed.
+
+A client that signs a person in declares what the authorization asks of the login when its request says nothing,
+`ClientDefinition.Prompt`: `Silent`, the default, for a person alone at their computer; `SelectAccount`, the open
+session shown to continue or switch account; `Login`, asked again at every authorization — a native application whose
+every launch goes through the login, so that each instance runs under the account chosen there. A request that says
+its `prompt` is followed instead; a confidential client has none to declare.
 
 `IOidcClientProvisioner` gives a module its credentials to speak as itself: a confidential client whose id is the
 module's name, and the scope of the same name whose resource is the module. The installation calls it when it
