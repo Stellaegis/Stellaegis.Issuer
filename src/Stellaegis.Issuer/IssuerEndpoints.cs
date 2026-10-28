@@ -109,8 +109,10 @@ public static class IssuerEndpoints
             user = authenticated.Succeeded ? authenticated.Principal : new ClaimsPrincipal(new ClaimsIdentity());
         }
 
+        // prompt=none: the application shows no page — an answer, or login_required, never the login.
+        var silent = request.HasPromptValue(PromptValues.None);
         if (user.Identity?.IsAuthenticated != true)
-            return Challenge(http, scheme);
+            return silent ? Forbid(Errors.LoginRequired, "No session is open, and prompt=none asks for no login.") : Challenge(http, scheme);
 
         // A login asked again — prompt=login, or a max_age the login of the session is older than, or does not say the
         // time of: the session is closed and the person sent to sign in, on a way back that no longer asks it.
@@ -118,9 +120,15 @@ public static class IssuerEndpoints
         if (request.HasPromptValue(PromptValues.Login)
             || request.MaxAge is { } maxAge && (authenticatedAt is not { } at || clock.GetUtcNow() - at > TimeSpan.FromSeconds(maxAge)))
         {
+            if (silent)
+                return Forbid(Errors.LoginRequired, "The login of the session is older than max_age, and prompt=none asks for no login.");
             await TrySignOutAsync(http, scheme);
             return Challenge(http, scheme);
         }
+
+        // prompt=select_account: the session stays open, and the login page shows it — to continue it, or to switch.
+        if (request.HasPromptValue(PromptValues.SelectAccount))
+            return Challenge(http, scheme);
 
         var admitted = await admissions.AdmitAsync(user, ct);
         if (admitted.IsFailure)

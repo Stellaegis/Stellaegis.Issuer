@@ -326,4 +326,54 @@ public sealed class FlowTests
             Assert.Equal(authorize, asked.Headers.GetValues("X-Return").Single());
         }
     }
+
+    [Fact]
+    public async Task Prompt_none_answers_an_open_session_and_says_login_required_rather_than_showing_the_login()
+    {
+        await using var app = await IssuerTestHost.Builder().StartAsync(Ct);
+        await app.DeclarePublicClientAsync(ct: Ct);
+        var (_, challenge) = IssuerTestHost.Pkce();
+        var silent = QueryHelpers.AddQueryString(IssuerTestHost.AuthorizeUrl("desktop", challenge), "prompt", "none");
+
+        string? ErrorOf(HttpResponseMessage response)
+        {
+            Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+            Assert.StartsWith(IssuerTestHost.RedirectUri, response.Headers.Location!.ToString());
+            var query = QueryHelpers.ParseQuery(response.Headers.Location.Query);
+            return query.TryGetValue("error", out var error) ? error.ToString() : null;
+        }
+
+        using (var anonymous = app.ClientAs(null))
+            Assert.Equal("login_required", ErrorOf(await anonymous.GetAsync(silent, Ct)));
+        using (var jane = app.ClientAs("jane"))
+            Assert.Null(ErrorOf(await jane.GetAsync(silent, Ct)));
+
+        // A login max_age would ask again is not asked: the session stays open, the application is told.
+        using var older = app.ClientAs("jane", profile: new Dictionary<string, string> { ["auth_time"] = DateTimeOffset.UtcNow.AddHours(-2).ToUnixTimeSeconds().ToString() });
+        var signOuts = app.SignOuts();
+        Assert.Equal("login_required", ErrorOf(await older.GetAsync(QueryHelpers.AddQueryString(silent, "max_age", "600"), Ct)));
+        Assert.Equal(signOuts, app.SignOuts());
+    }
+
+    [Fact]
+    public async Task Prompt_select_account_sends_the_open_session_to_the_login_page_without_closing_it()
+    {
+        await using var app = await IssuerTestHost.Builder().StartAsync(Ct);
+        await app.DeclarePublicClientAsync(ct: Ct);
+        var (_, challenge) = IssuerTestHost.Pkce();
+        var authorize = IssuerTestHost.AuthorizeUrl("desktop", challenge);
+        using var jane = app.ClientAs("jane");
+
+        var signOuts = app.SignOuts();
+        var asked = await jane.GetAsync(QueryHelpers.AddQueryString(authorize, "prompt", "select_account"), Ct);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, asked.StatusCode);
+        Assert.Equal(authorize, asked.Headers.GetValues("X-Return").Single());
+        Assert.Equal(signOuts, app.SignOuts());
+
+        // "Continue" on the login page comes back on the way back, which no longer asks: the code is given.
+        var continued = await jane.GetAsync(authorize, Ct);
+        Assert.Equal(HttpStatusCode.Redirect, continued.StatusCode);
+        Assert.True(QueryHelpers.ParseQuery(continued.Headers.Location!.Query).ContainsKey("code"));
+    }
 }
