@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Options;
 using OpenIddict.Abstractions;
@@ -28,6 +30,24 @@ public enum ClientKind
     Native,
 }
 
+/// <summary>
+/// What the authorization asks of the login for a client whose request says nothing of it — no <c>prompt</c>: the
+/// client's own posture, declared once, so that no application has to remember it at every request. A request that
+/// says <c>prompt</c> is followed instead. On the wire, its name.
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<ClientPrompt>))]
+public enum ClientPrompt
+{
+    /// <summary>An open session is answered without a page: the default, for a person alone at their computer.</summary>
+    Silent,
+
+    /// <summary>The open session is shown on the login page, to continue it or switch account, as <c>prompt=select_account</c>.</summary>
+    SelectAccount,
+
+    /// <summary>The login is asked again at every authorization, as <c>prompt=login</c>.</summary>
+    Login,
+}
+
 /// <summary>A client as the catalog shows it: nothing secret.</summary>
 /// <param name="ClientId">Its id.</param>
 /// <param name="DisplayName">Its display name.</param>
@@ -41,7 +61,11 @@ public sealed record OidcClient(
     ClientKind Kind,
     IReadOnlyList<string> Scopes,
     IReadOnlyList<string> RedirectUris,
-    IReadOnlyList<string> PostLogoutRedirectUris);
+    IReadOnlyList<string> PostLogoutRedirectUris)
+{
+    /// <summary>What the authorization asks of the login when the client's request says nothing of it.</summary>
+    public ClientPrompt Prompt { get; init; }
+}
 
 /// <summary>
 /// A client to create or to change. What is secret or specific to the environment — the secret, the redirect
@@ -62,7 +86,14 @@ public sealed record ClientDefinition(
     IReadOnlyList<string>? Scopes = null,
     IReadOnlyList<string>? RedirectUris = null,
     IReadOnlyList<string>? PostLogoutRedirectUris = null,
-    string? Secret = null);
+    string? Secret = null)
+{
+    /// <summary>
+    /// What the authorization asks of the login when the client's request says nothing of it; <see cref="ClientPrompt.Silent"/>
+    /// unless set. A client that signs no one in — a confidential one — has none to declare.
+    /// </summary>
+    public ClientPrompt Prompt { get; init; }
+}
 
 /// <summary>A client just created or changed, and its secret when one was generated — shown once, never read back.</summary>
 /// <param name="Client">The client.</param>
@@ -274,6 +305,10 @@ public sealed class IssuerCatalog(IOpenIddictApplicationManager applications, IO
             return IssuerErrors.ClientInvalid("A public client holds no secret.");
         if (definition.Secret is not null && string.IsNullOrWhiteSpace(definition.Secret))
             return IssuerErrors.ClientInvalid("The secret is empty.");
+        if (!Enum.IsDefined(definition.Prompt))
+            return IssuerErrors.ClientInvalid($"'{definition.Prompt}' is not a prompt.");
+        if (definition.Kind == ClientKind.Confidential && definition.Prompt != ClientPrompt.Silent)
+            return IssuerErrors.ClientInvalid("A confidential client signs no one in: it has no prompt.");
         return null;
     }
 
@@ -325,6 +360,8 @@ public sealed class IssuerCatalog(IOpenIddictApplicationManager applications, IO
             var postLogout = definition.PostLogoutRedirectUris is { Count: > 0 } givenLogout ? givenLogout : configured?.PostLogoutRedirectUris ?? [];
             foreach (var uri in postLogout)
                 descriptor.PostLogoutRedirectUris.Add(new Uri(uri, UriKind.Absolute));
+            if (definition.Prompt != ClientPrompt.Silent)
+                descriptor.Properties[PromptProperty] = JsonSerializer.SerializeToElement(definition.Prompt.ToString());
         }
         foreach (var scope in (definition.Scopes ?? []).Where(scope => !AlwaysAllowedScopes.Contains(scope, StringComparer.Ordinal)))
             descriptor.Permissions.Add(Permissions.Prefixes.Scope + scope);
@@ -356,8 +393,21 @@ public sealed class IssuerCatalog(IOpenIddictApplicationManager applications, IO
             kind,
             permissions.Where(permission => permission.StartsWith(Permissions.Prefixes.Scope, StringComparison.Ordinal)).Select(permission => permission[Permissions.Prefixes.Scope.Length..]).Order(StringComparer.Ordinal).ToList(),
             (await applications.GetRedirectUrisAsync(application, cancellationToken).ConfigureAwait(false)).ToList(),
-            (await applications.GetPostLogoutRedirectUrisAsync(application, cancellationToken).ConfigureAwait(false)).ToList());
+            (await applications.GetPostLogoutRedirectUrisAsync(application, cancellationToken).ConfigureAwait(false)).ToList())
+        {
+            Prompt = PromptOf(await applications.GetPropertiesAsync(application, cancellationToken).ConfigureAwait(false)),
+        };
     }
+
+    /// <summary>The property of an OpenIddict application its <see cref="ClientPrompt"/> is kept in, absent when silent.</summary>
+    internal const string PromptProperty = "stellaegis_prompt";
+
+    /// <summary>The <see cref="ClientPrompt"/> the properties of an application keep; silent when they keep none, or one this version does not know.</summary>
+    internal static ClientPrompt PromptOf(ImmutableDictionary<string, JsonElement> properties)
+        => properties.TryGetValue(PromptProperty, out var value) && value.ValueKind == JsonValueKind.String
+            && Enum.TryParse<ClientPrompt>(value.GetString(), ignoreCase: false, out var prompt) && Enum.IsDefined(prompt)
+            ? prompt
+            : ClientPrompt.Silent;
 
     private async Task<OidcScope> ToScopeAsync(object scope, CancellationToken cancellationToken)
         => new(

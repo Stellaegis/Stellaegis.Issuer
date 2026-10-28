@@ -240,6 +240,12 @@ public abstract class IssuerStoreTests(IIssuerDatabaseFixture database) : IAsync
         Assert.Equal(ClientKind.Confidential, read.Value.Kind);
         Assert.Equal(["documents"], read.Value.Scopes);
 
+        // The prompt of a client is kept in the properties of its application.
+        var desktop = await catalog.CreateClientAsync(new ClientDefinition("desktop", Kind: ClientKind.Native, RedirectUris: ["http://127.0.0.1/callback"]) { Prompt = ClientPrompt.Login }, Ct);
+        Assert.True(desktop.IsSuccess, desktop.Error?.ToString());
+        Assert.Equal(ClientPrompt.Login, (await catalog.GetClientAsync("desktop", Ct)).Value.Prompt);
+        Assert.True((await catalog.DeleteClientAsync("desktop", Ct)).IsSuccess);
+
         Assert.True((await catalog.DeleteClientAsync("reports", Ct)).IsSuccess);
         Assert.True((await catalog.GetClientAsync("reports", Ct)).IsFailure);
         Assert.True((await catalog.DeleteScopeAsync("documents", Ct)).IsSuccess);

@@ -216,19 +216,32 @@ internal static class IssuerTestHost
     private sealed record ProblemBody(string? Code);
 
     /// <summary>A public client, <c>desktop</c>, allowed the scope <paramref name="scope"/>, and that scope with itself as resource.</summary>
-    public static async Task DeclarePublicClientAsync(this WebApplication app, string clientId = "desktop", string scope = "documents", CancellationToken ct = default, ClientKind kind = ClientKind.Public, string redirectUri = RedirectUri)
+    public static async Task DeclarePublicClientAsync(this WebApplication app, string clientId = "desktop", string scope = "documents", CancellationToken ct = default, ClientKind kind = ClientKind.Public, string redirectUri = RedirectUri,
+        ClientPrompt prompt = ClientPrompt.Silent)
     {
         using var services = app.Services.CreateScope();
         var catalog = services.ServiceProvider.GetRequiredService<IssuerCatalog>();
         if ((await catalog.GetScopeAsync(scope, ct)).IsFailure)
             Assert.True((await catalog.CreateScopeAsync(new ScopeDefinition(scope), ct)).IsSuccess);
-        var created = await catalog.CreateClientAsync(new ClientDefinition(clientId, Kind: kind, Scopes: ["email", "profile", scope], RedirectUris: [redirectUri]), ct);
+        var created = await catalog.CreateClientAsync(new ClientDefinition(clientId, Kind: kind, Scopes: ["email", "profile", scope], RedirectUris: [redirectUri]) { Prompt = prompt }, ct);
         Assert.True(created.IsSuccess, created.Error?.ToString());
     }
 
     public static CapturingEventPublisher Events(this WebApplication app) => (CapturingEventPublisher)app.Services.GetRequiredService<IEventPublisher>();
 
     public static RefusingSubjects Refusing(this WebApplication app) => app.Services.GetRequiredService<RefusingSubjects>();
+
+    /// <summary>
+    /// The way back a challenge of the authorization gave, as the login page would follow it: the authorization asked,
+    /// without what it asked of the login, and with the mark saying the login was done.
+    /// </summary>
+    public static string WayBack(this HttpResponseMessage challenged, string authorize)
+    {
+        Assert.Equal(HttpStatusCode.Unauthorized, challenged.StatusCode);
+        var back = challenged.Headers.GetValues("X-Return").Single();
+        Assert.StartsWith(authorize + "&" + IssuerEndpoints.PromptedParameter + "=", back);
+        return back;
+    }
 
     /// <summary>How many times the host's scheme signed a person out.</summary>
     public static int SignOuts(this WebApplication app) => app.Services.GetRequiredService<SignOutCounter>().Count;

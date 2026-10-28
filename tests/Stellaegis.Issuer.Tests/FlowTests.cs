@@ -287,12 +287,11 @@ public sealed class FlowTests
         var signOuts = app.SignOuts();
         var asked = await jane.GetAsync(QueryHelpers.AddQueryString(authorize, "prompt", "login"), Ct);
 
-        Assert.Equal(HttpStatusCode.Unauthorized, asked.StatusCode);
+        var wayBack = asked.WayBack(authorize);
         Assert.Equal(signOuts + 1, app.SignOuts());
-        Assert.Equal(authorize, asked.Headers.GetValues("X-Return").Single());
 
         // Back from the login, the way back no longer asks it: the code is given.
-        var back = await jane.GetAsync(authorize, Ct);
+        var back = await jane.GetAsync(wayBack, Ct);
         Assert.Equal(HttpStatusCode.Redirect, back.StatusCode);
         Assert.True(QueryHelpers.ParseQuery(back.Headers.Location!.Query).ContainsKey("code"));
     }
@@ -321,9 +320,8 @@ public sealed class FlowTests
             using var session = Session(minutesAgo);
             var signOuts = app.SignOuts();
             var asked = await session.GetAsync(asking, Ct);
-            Assert.Equal(HttpStatusCode.Unauthorized, asked.StatusCode);
+            asked.WayBack(authorize);
             Assert.Equal(signOuts + 1, app.SignOuts());
-            Assert.Equal(authorize, asked.Headers.GetValues("X-Return").Single());
         }
     }
 
@@ -367,13 +365,72 @@ public sealed class FlowTests
         var signOuts = app.SignOuts();
         var asked = await jane.GetAsync(QueryHelpers.AddQueryString(authorize, "prompt", "select_account"), Ct);
 
-        Assert.Equal(HttpStatusCode.Unauthorized, asked.StatusCode);
-        Assert.Equal(authorize, asked.Headers.GetValues("X-Return").Single());
+        var wayBack = asked.WayBack(authorize);
         Assert.Equal(signOuts, app.SignOuts());
 
         // "Continue" on the login page comes back on the way back, which no longer asks: the code is given.
-        var continued = await jane.GetAsync(authorize, Ct);
+        var continued = await jane.GetAsync(wayBack, Ct);
         Assert.Equal(HttpStatusCode.Redirect, continued.StatusCode);
         Assert.True(QueryHelpers.ParseQuery(continued.Headers.Location!.Query).ContainsKey("code"));
+    }
+
+    [Theory]
+    [InlineData(ClientPrompt.Login, true)]
+    [InlineData(ClientPrompt.SelectAccount, false)]
+    public async Task The_prompt_of_the_client_applies_when_its_request_says_none_and_its_way_back_does_not_send_the_person_round(ClientPrompt prompt, bool signsOut)
+    {
+        await using var app = await IssuerTestHost.Builder().StartAsync(Ct);
+        await app.DeclarePublicClientAsync(ct: Ct, prompt: prompt);
+        var (_, challenge) = IssuerTestHost.Pkce();
+        var authorize = IssuerTestHost.AuthorizeUrl("desktop", challenge);
+        using var jane = app.ClientAs("jane");
+
+        var signOuts = app.SignOuts();
+        var wayBack = (await jane.GetAsync(authorize, Ct)).WayBack(authorize);
+        Assert.Equal(signsOut ? signOuts + 1 : signOuts, app.SignOuts());
+
+        var back = await jane.GetAsync(wayBack, Ct);
+        Assert.Equal(HttpStatusCode.Redirect, back.StatusCode);
+        Assert.True(QueryHelpers.ParseQuery(back.Headers.Location!.Query).ContainsKey("code"));
+
+        // A request that says its prompt is followed instead of the client's.
+        var silent = await jane.GetAsync(QueryHelpers.AddQueryString(authorize, "prompt", "none"), Ct);
+        Assert.Equal(HttpStatusCode.Redirect, silent.StatusCode);
+        Assert.True(QueryHelpers.ParseQuery(silent.Headers.Location!.Query).ContainsKey("code"));
+    }
+
+    [Fact]
+    public async Task A_mark_of_the_way_back_that_is_forged_or_belongs_to_another_authorization_answers_nothing()
+    {
+        await using var app = await IssuerTestHost.Builder().StartAsync(Ct);
+        await app.DeclarePublicClientAsync(ct: Ct, prompt: ClientPrompt.Login);
+        var (_, challenge) = IssuerTestHost.Pkce();
+        var authorize = IssuerTestHost.AuthorizeUrl("desktop", challenge);
+        using var jane = app.ClientAs("jane");
+        var mark = QueryHelpers.ParseQuery(new Uri("http://localhost" + (await jane.GetAsync(authorize, Ct)).WayBack(authorize)).Query)[IssuerEndpoints.PromptedParameter].ToString();
+
+        var forged = await jane.GetAsync(QueryHelpers.AddQueryString(authorize, IssuerEndpoints.PromptedParameter, "forged"), Ct);
+        forged.WayBack(authorize);
+
+        var other = IssuerTestHost.AuthorizeUrl("desktop", challenge, state: "another");
+        var borrowed = await jane.GetAsync(QueryHelpers.AddQueryString(other, IssuerEndpoints.PromptedParameter, mark), Ct);
+        borrowed.WayBack(other);
+    }
+
+    [Fact]
+    public async Task The_catalog_keeps_the_prompt_of_a_client_and_refuses_one_for_a_confidential_client()
+    {
+        await using var app = await IssuerTestHost.Builder().StartAsync(Ct);
+        using var services = app.Services.CreateScope();
+        var catalog = services.ServiceProvider.GetRequiredService<IssuerCatalog>();
+
+        var created = await catalog.CreateClientAsync(new ClientDefinition("desktop", Kind: ClientKind.Native, RedirectUris: ["http://127.0.0.1/callback"]) { Prompt = ClientPrompt.SelectAccount }, Ct);
+        Assert.Equal(ClientPrompt.SelectAccount, created.Value.Client.Prompt);
+        Assert.Equal(ClientPrompt.SelectAccount, (await catalog.GetClientAsync("desktop", Ct)).Value.Prompt);
+        var silent = await catalog.UpdateClientAsync(new ClientDefinition("desktop", Kind: ClientKind.Native, RedirectUris: ["http://127.0.0.1/callback"]), Ct);
+        Assert.Equal(ClientPrompt.Silent, silent.Value.Client.Prompt);
+
+        var refused = await catalog.CreateClientAsync(new ClientDefinition("worker", Kind: ClientKind.Confidential) { Prompt = ClientPrompt.Login }, Ct);
+        Assert.Equal(IssuerErrors.ClientInvalidCode, refused.Error?.Code);
     }
 }

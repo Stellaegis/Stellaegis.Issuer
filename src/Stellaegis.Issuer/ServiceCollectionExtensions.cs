@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -65,6 +66,7 @@ public static class ServiceCollectionExtensions
         services.AddStellaegisIssuerModule();
         services.AddStellaegisActorAdmissions();
         services.TryAddSingleton(TimeProvider.System);
+        services.AddDataProtection();   // the mark of a way back from the login, IssuerEndpoints.PromptedParameter
         services.TryAddSingleton<IEventPublisher>(NullEventPublisher.Instance);
         services.AddOptions<IssuerOptions>().Services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<IssuerOptions>, EnvironmentValidator>());
 

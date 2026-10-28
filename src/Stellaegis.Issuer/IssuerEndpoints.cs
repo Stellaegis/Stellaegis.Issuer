@@ -1,9 +1,11 @@
 using System.Collections.Immutable;
 using System.Globalization;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.WebUtilities;
@@ -95,11 +97,13 @@ public static class IssuerEndpoints
     }
 
     private static async Task<IResult> AuthorizeAsync(
-        HttpContext http, IOpenIddictScopeManager scopes, IActorAdmissions admissions, IOptions<IssuerOptions> options, TimeProvider clock, CancellationToken ct)
+        HttpContext http, IOpenIddictScopeManager scopes, IOpenIddictApplicationManager applications, IActorAdmissions admissions,
+        IDataProtectionProvider protection, IOptions<IssuerOptions> options, TimeProvider clock, CancellationToken ct)
     {
         var request = http.GetOpenIddictServerRequest()
             ?? throw new InvalidOperationException("The OpenID Connect request was not read: the authorization route is served without the OpenIddict server.");
         var scheme = options.Value.AuthenticationScheme;
+        var prompted = protection.CreateProtector(PromptedPurpose).ToTimeLimitedDataProtector();
 
         // The host's authentication may not be the default scheme: read the person from the one named.
         var user = http.User;
@@ -112,23 +116,33 @@ public static class IssuerEndpoints
         // prompt=none: the application shows no page — an answer, or login_required, never the login.
         var silent = request.HasPromptValue(PromptValues.None);
         if (user.Identity?.IsAuthenticated != true)
-            return silent ? Forbid(Errors.LoginRequired, "No session is open, and prompt=none asks for no login.") : Challenge(http, scheme);
+            return silent ? Forbid(Errors.LoginRequired, "No session is open, and prompt=none asks for no login.") : Challenge(http, scheme, request, prompted, clock);
+
+        // Back from the login this authorization sent the person to: what it asked of the login is answered. Otherwise
+        // the request's prompt, or the client's own when the request says none.
+        var answered = WasPrompted(http, request, prompted);
+        var prompt = answered ? ClientPrompt.Silent
+            : request.HasPromptValue(PromptValues.Login) ? ClientPrompt.Login
+            : request.HasPromptValue(PromptValues.SelectAccount) ? ClientPrompt.SelectAccount
+            : string.IsNullOrEmpty(request.Prompt) && await applications.FindByClientIdAsync(request.ClientId!, ct) is { } application
+                ? IssuerCatalog.PromptOf(await applications.GetPropertiesAsync(application, ct))
+                : ClientPrompt.Silent;
 
         // A login asked again — prompt=login, or a max_age the login of the session is older than, or does not say the
-        // time of: the session is closed and the person sent to sign in, on a way back that no longer asks it.
+        // time of: the session is closed and the person sent to sign in.
         var authenticatedAt = AuthenticationTime(user);
-        if (request.HasPromptValue(PromptValues.Login)
-            || request.MaxAge is { } maxAge && (authenticatedAt is not { } at || clock.GetUtcNow() - at > TimeSpan.FromSeconds(maxAge)))
+        if (prompt == ClientPrompt.Login
+            || !answered && request.MaxAge is { } maxAge && (authenticatedAt is not { } at || clock.GetUtcNow() - at > TimeSpan.FromSeconds(maxAge)))
         {
             if (silent)
-                return Forbid(Errors.LoginRequired, "The login of the session is older than max_age, and prompt=none asks for no login.");
+                return Forbid(Errors.LoginRequired, "A new login is asked, and prompt=none asks for no login.");
             await TrySignOutAsync(http, scheme);
-            return Challenge(http, scheme);
+            return Challenge(http, scheme, request, prompted, clock);
         }
 
         // prompt=select_account: the session stays open, and the login page shows it — to continue it, or to switch.
-        if (request.HasPromptValue(PromptValues.SelectAccount))
-            return Challenge(http, scheme);
+        if (prompt == ClientPrompt.SelectAccount)
+            return Challenge(http, scheme, request, prompted, clock);
 
         var admitted = await admissions.AdmitAsync(user, ct);
         if (admitted.IsFailure)
@@ -213,18 +227,51 @@ public static class IssuerEndpoints
     private const string TokenValidationParametersAuthenticationType = "AuthenticationTypes.Federation";
 
     /// <summary>
-    /// Sends the person to sign in on the host's scheme, coming back to this authorization without what it asked of
-    /// the login — <c>prompt</c>, <c>max_age</c> —: the login just done answers it, and asking it again would send the
-    /// person round, the more so on a scheme that says no <c>auth_time</c>.
+    /// The parameter the way back from the login carries, saying that this authorization sent the person to sign in:
+    /// what it asked of the login — the request's <c>prompt</c> or <c>max_age</c>, the client's own <see cref="ClientPrompt"/>
+    /// — is then answered. Without it the client's posture, which no request carries, would send the person round.
     /// </summary>
-    private static IResult Challenge(HttpContext http, string? scheme)
+    internal const string PromptedParameter = "stellaegis_prompted";
+
+    private const string PromptedPurpose = "Stellaegis.Issuer.Authorization.Prompted";
+
+    // Long enough for a login with its second factor; a way back older than this asks the login again.
+    private static readonly TimeSpan PromptedLifetime = TimeSpan.FromMinutes(10);
+
+    /// <summary>
+    /// Sends the person to sign in on the host's scheme, coming back to this authorization without what it asked of
+    /// the login — <c>prompt</c>, <c>max_age</c> — and with <see cref="PromptedParameter"/>: the login just done
+    /// answers it, and asking it again would send the person round, the more so on a scheme that says no <c>auth_time</c>.
+    /// The mark is protected and bound to this request, so that nobody writes it to skip a login.
+    /// </summary>
+    private static IResult Challenge(HttpContext http, string? scheme, OpenIddictRequest request, ITimeLimitedDataProtector prompted, TimeProvider clock)
     {
         var query = QueryHelpers.ParseQuery(http.Request.QueryString.Value)
-            .Where(parameter => parameter.Key is not (Parameters.Prompt or Parameters.MaxAge))
-            .SelectMany(parameter => parameter.Value.Select(value => KeyValuePair.Create(parameter.Key, value)));
+            .Where(parameter => parameter.Key is not (Parameters.Prompt or Parameters.MaxAge or PromptedParameter))
+            .SelectMany(parameter => parameter.Value.Select(value => KeyValuePair.Create(parameter.Key, value)))
+            .Append(KeyValuePair.Create(PromptedParameter, (string?)prompted.Protect(Fingerprint(request), clock.GetUtcNow() + PromptedLifetime)));
         var properties = new AuthenticationProperties { RedirectUri = http.Request.PathBase + http.Request.Path + QueryString.Create(query) };
         return scheme is null ? Results.Challenge(properties) : Results.Challenge(properties, [scheme]);
     }
+
+    /// <summary>Whether this request is the way back of a login this authorization sent the person to, its mark unspent and its own.</summary>
+    private static bool WasPrompted(HttpContext http, OpenIddictRequest request, ITimeLimitedDataProtector prompted)
+    {
+        if (http.Request.Query[PromptedParameter].ToString() is not { Length: > 0 } mark)
+            return false;
+        try
+        {
+            return prompted.Unprotect(mark) == Fingerprint(request);
+        }
+        catch (CryptographicException)
+        {
+            return false;   // forged, expired, or protected by another key ring: the login is asked
+        }
+    }
+
+    // What binds the mark to its authorization: the client, where it comes back, its PKCE challenge and its state.
+    private static string Fingerprint(OpenIddictRequest request)
+        => string.Join('\n', request.ClientId, request.RedirectUri, request.CodeChallenge, request.State);
 
     /// <summary>When the person of the session authenticated, its <c>auth_time</c> in seconds since the epoch; <see langword="null"/> when the session does not say.</summary>
     private static DateTimeOffset? AuthenticationTime(ClaimsPrincipal user)
