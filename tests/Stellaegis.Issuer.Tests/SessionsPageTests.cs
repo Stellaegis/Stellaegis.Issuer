@@ -85,13 +85,13 @@ public sealed class SessionsPageTests
         await using var app = await StartAsync(options => options.AfterRevokeAllPath = "/bye");
         var tokens = await SignInAsync(app, "jane");
         var browser = new Browser(app, "jane");
-        var signOuts = HeaderAuthentication.SignOuts;
+        var signOuts = app.SignOuts();
 
         var away = await browser.PostFormAsync("/account/sessions", new Dictionary<string, string>(), Ct, postPath: "/account/sessions?handler=RevokeAll");
 
         Assert.Equal(HttpStatusCode.Redirect, away.StatusCode);
         Assert.Equal("/bye", away.Headers.Location!.ToString());
-        Assert.Equal(signOuts + 1, HeaderAuthentication.SignOuts);
+        Assert.Equal(signOuts + 1, app.SignOuts());
         Assert.Equal("invalid_grant", (await app.RefreshAsync(tokens.RefreshToken, ct: Ct)).Error);
         Assert.Single(app.Events().Events.OfType<TokenRevokedEvent>());
     }

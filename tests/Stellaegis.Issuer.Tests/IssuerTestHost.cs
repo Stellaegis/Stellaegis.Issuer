@@ -57,13 +57,21 @@ internal sealed class RefusingSubjects : IActorAdmission
 /// a service, every operation granted; a challenge answers 401; a sign-out is recorded. What the cookie of Identity
 /// or Negotiate would be for the issuer, and what the bearer of a resource server would be for its routes.
 /// </summary>
-internal sealed class HeaderAuthentication(IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder)
+/// <summary>The sign-outs of one host's scheme: one counter per host, the tests of a class running side by side.</summary>
+internal sealed class SignOutCounter
+{
+    private int _count;
+
+    public int Count => _count;
+
+    public void Add() => Interlocked.Increment(ref _count);
+}
+
+internal sealed class HeaderAuthentication(IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder, SignOutCounter signOuts)
     : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder), IAuthenticationSignOutHandler
 {
     public const string SchemeName = "Header";
     public const string GrantClaim = "grant";
-
-    public static int SignOuts;
 
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
@@ -99,7 +107,7 @@ internal sealed class HeaderAuthentication(IOptionsMonitor<AuthenticationSchemeO
 
     public Task SignOutAsync(AuthenticationProperties? properties)
     {
-        Interlocked.Increment(ref SignOuts);
+        signOuts.Add();
         return Task.CompletedTask;
     }
 }
@@ -164,6 +172,7 @@ internal static class IssuerTestHost
     /// <summary>The header authentication, one policy per operation of the module requiring its grant, and the startup check of the administration routes.</summary>
     public static IServiceCollection AddTestAuthentication(this IServiceCollection services)
     {
+        services.AddSingleton<SignOutCounter>();
         services.AddAuthentication(HeaderAuthentication.SchemeName)
             .AddScheme<AuthenticationSchemeOptions, HeaderAuthentication>(HeaderAuthentication.SchemeName, null);
         services.AddAuthorization(options =>
@@ -211,6 +220,9 @@ internal static class IssuerTestHost
     public static CapturingEventPublisher Events(this WebApplication app) => (CapturingEventPublisher)app.Services.GetRequiredService<IEventPublisher>();
 
     public static RefusingSubjects Refusing(this WebApplication app) => app.Services.GetRequiredService<RefusingSubjects>();
+
+    /// <summary>How many times the host's scheme signed a person out.</summary>
+    public static int SignOuts(this WebApplication app) => app.Services.GetRequiredService<SignOutCounter>().Count;
 
     public static HttpClient ClientAs(this WebApplication app, string? subject, string? email = null, string? name = null, string? amr = null,
         IReadOnlyDictionary<string, string>? profile = null)

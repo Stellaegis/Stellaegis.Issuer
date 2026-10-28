@@ -222,7 +222,7 @@ public sealed class FlowTests
         Assert.Equal("invalid_grant", refreshed.Error);
         Assert.Equal("The account is blocked.", refreshed.ErrorDescription);
 
-        var signOuts = HeaderAuthentication.SignOuts;
+        var signOuts = app.SignOuts();
         var (_, challenge) = IssuerTestHost.Pkce();
         using var jane = app.ClientAs("jane");
         var response = await jane.GetAsync(IssuerTestHost.AuthorizeUrl("desktop", challenge), Ct);
@@ -230,7 +230,7 @@ public sealed class FlowTests
         var query = QueryHelpers.ParseQuery(response.Headers.Location!.Query);
         Assert.Equal("access_denied", query["error"].ToString());
         Assert.Equal("The account is blocked.", query["error_description"].ToString());
-        Assert.Equal(signOuts + 1, HeaderAuthentication.SignOuts);       // the person is signed out of the host's scheme
+        Assert.Equal(signOuts + 1, app.SignOuts());       // the person is signed out of the host's scheme
     }
 
     [Fact]
