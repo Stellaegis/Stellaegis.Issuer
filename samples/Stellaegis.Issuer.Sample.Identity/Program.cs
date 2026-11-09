@@ -107,7 +107,8 @@ app.MapStellaegisIdentityPages();   // /login, /register, /account/… — and /
 app.MapStellaegisIssuer();          // /connect/authorize, /connect/logout; /connect/token is OpenIddict's own
 app.MapGroup("/api/admin")
     .MapIdentityAdminEndpoints()
-    .RequireAuthorizationPerOperation(operation => operation.ToString());
+    .RequireAuthorizationPerOperation(operation => operation.ToString())
+    .AllowAnyResource();   // the administrators of the example reach every account; a rights system decides on each
 app.MapGroup("/api/admin")
     .MapIssuerAdminEndpoints()
     .RequireAuthorizationPerOperation(operation => operation.ToString());

@@ -56,6 +56,24 @@ public sealed class LoggingMailer(ILogger<LoggingMailer> logger) : IIdentityMail
         logger.LogWarning("MAIL to {Email}: someone tried to register this address, which has an account already", email);
         return Task.CompletedTask;
     }
+
+    public Task SendEmailChangedAsync(string previousEmail, string newEmail, Uri revertLink, TimeSpan lifetime, CancellationToken cancellationToken = default)
+    {
+        logger.LogWarning("MAIL to {Email}: the e-mail of your account is now {NewEmail}; if this was not you, restore it at {Link}, valid for {Lifetime}", previousEmail, newEmail, revertLink, lifetime);
+        return Task.CompletedTask;
+    }
+
+    public Task SendEmailChangeApprovalAsync(string previousEmail, string newEmail, Uri approvalLink, TimeSpan lifetime, CancellationToken cancellationToken = default)
+    {
+        logger.LogWarning("MAIL to {Email}: approve the change of the e-mail of your account to {NewEmail} at {Link}, valid for {Lifetime}", previousEmail, newEmail, approvalLink, lifetime);
+        return Task.CompletedTask;
+    }
+
+    public Task SendAccountLockedAsync(string email, DateTimeOffset until, CancellationToken cancellationToken = default)
+    {
+        logger.LogWarning("MAIL to {Email}: your account is locked until {Until} after too many failed attempts", email, until);
+        return Task.CompletedTask;
+    }
 }
 
 /// <summary>
