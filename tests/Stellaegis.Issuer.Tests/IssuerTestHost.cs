@@ -154,9 +154,11 @@ internal static class IssuerTestHost
     }
 
     /// <summary>
-    /// Builds and starts the host. The admission at the door is off unless <paramref name="door"/>: it would refuse a
-    /// blocked person before the authorization route sends the client <c>access_denied</c>, which is what the flow
-    /// tests look at. The SQLite database is created by EF Core unless <paramref name="ensureCreated"/> is off —
+    /// Builds and starts the host. The admission at the door stands off the protocol routes under <c>/connect</c>
+    /// unless <paramref name="door"/> puts it on the whole pipeline: there it would refuse a blocked person before the
+    /// authorization route sends the client <c>access_denied</c>, which is what the flow tests look at. Primitives
+    /// refuses to start a host whose admissions registered are never asked, so the door is never simply off. The SQLite
+    /// database is created by EF Core unless <paramref name="ensureCreated"/> is off —
     /// the PostgreSQL tests install theirs from the frozen script, and prove that EF Core never has to.
     /// </summary>
     public static async Task<WebApplication> StartAsync(this WebApplicationBuilder builder, CancellationToken ct, bool door = false, bool ensureCreated = true, Action<WebApplication>? map = null)
@@ -170,6 +172,8 @@ internal static class IssuerTestHost
         app.UseAuthentication();
         if (door)
             app.UseStellaegisActorAdmission();
+        else
+            app.UseWhen(context => !context.Request.Path.StartsWithSegments("/connect"), branch => branch.UseStellaegisActorAdmission());
         app.UseAuthorization();
         app.MapStellaegisIssuer();
         app.MapGroup("/api/admin").MapIssuerAdminEndpoints().RequireAuthorizationPerOperation(operation => operation.ToString());
