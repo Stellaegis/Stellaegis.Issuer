@@ -354,6 +354,12 @@ password never passes through the application; with Negotiate, the browser signs
 declared *native*, its redirect URI `http://127.0.0.1/callback`, and it listens on whatever port is free. The
 `samples/` README plays the flow by hand; `IdentityModel.OidcClient` does it in a .NET application.
 
+The family ships no client for this flow. Written without a dependency, it takes a few pieces: a PKCE verifier and
+its S256 challenge, a `state` checked when the browser comes back, a listener on `127.0.0.1` on a free port — a TCP
+socket rather than an `HttpListener`, which on Windows goes through http.sys —, then the exchange of the code on the
+token endpoint the discovery document names. A refresh token comes only to a client declared with `offline_access`;
+where the application keeps it is the application's.
+
 ## The sessions page
 
 `Stellaegis.Issuer.Server` is a Razor class library with one page, `/account/sessions`: the applications signed
