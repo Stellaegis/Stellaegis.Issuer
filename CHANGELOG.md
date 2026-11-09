@@ -7,6 +7,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [5.4.1] — 2026-11-09
+
+On `Stellaegis.Primitives` 5.6.0, whose startup refuses a host it used to let through badly assembled.
+
+### Changed
+
+- **`Stellaegis.Primitives` 5.6.0 and the 10.0.14 runtime** — Microsoft.Extensions, EF Core SQL Server, JwtBearer, and
+  the two cryptography packages pinned above the vulnerable ones. Nothing changes in this package's code.
+- **The example host on `Stellaegis.Identity` 9.0.1**, replayed end to end — the native flow, the inventory with the
+  token and with its own credentials, the refresh, a session ended and its token refused.
+
+### Updating from 5.4.0
+
+Take the version. A host meets what the startup of Primitives 5.6.0 now refuses, listed with its way out in the
+CHANGELOG of Primitives, § *Updating from 5.5.0* — for an issuer, mostly this: **admissions registered are asked**.
+`AddStellaegisIssuerAdmission` registers one, so a host calls `UseStellaegisActorAdmission()`; the branch that keeps
+it off the protocol routes, `app.UseWhen(context => !context.Request.Path.StartsWithSegments("/connect"), …)`, counts.
+
 ## [5.4.0] — 2026-10-28
 
 What the application asks of the login. The authorization served any open session without a page, whatever the
