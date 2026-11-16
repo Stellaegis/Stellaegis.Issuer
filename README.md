@@ -24,8 +24,8 @@ The library targets .NET 10 and is released under the MIT license.
 | `Stellaegis.Issuer.Client` | What a host that is not the issuer takes: the validation of the bearer tokens, the admission of the revoked tokens, the credentials a service speaks with. No OpenIddict | `Stellaegis.Primitives.AspNetCore`, JwtBearer |
 | `Stellaegis.Issuer.Server` | The sessions page a person ends their sessions on, as a Razor class library the host mounts beside the pages of the accounts | `Stellaegis.Issuer`, ASP.NET Core |
 
-The five packages share one version, and follow the major version of Stellaegis.Primitives: 5.2.0 runs on
-Primitives 5.2.0. A host takes one store adapter, PostgreSQL or SQL Server.
+The five packages share one version. They started at the major version of Stellaegis.Primitives, 5; 5.4.2 runs on
+Primitives 6.0.0. A host takes one store adapter, PostgreSQL or SQL Server.
 
 ## Two hosts, in full
 

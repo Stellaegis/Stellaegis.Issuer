@@ -7,6 +7,40 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [5.4.2] — 2026-11-16
+
+On `Stellaegis.Primitives` 6.0.0, whose `Stellaegis.Primitives.Data` no longer references Dapper, and on OpenIddict
+7.9.0. What the packages do is unchanged.
+
+### Changed
+
+- **`Stellaegis.Primitives` 6.0.0.** The stores of the issuer run on EF Core and never used Dapper. Dapper still
+  reached an application through `Stellaegis.Primitives.Data` 5.x, which both store adapters reference; with this
+  version it no longer does.
+- **OpenIddict 7.9.0**, from 7.7.2. It fixes the advisory GHSA-cxgj-hwwh-855g, in the validation stack of OpenIddict.
+  The issuer does not register that stack: a resource server validates a bearer through `Stellaegis.Issuer.Client`,
+  on JwtBearer. No version of these packages was exposed; the version is taken so that an audit of your dependencies
+  reads clean.
+- **The 10.0.15 runtime** — Microsoft.Extensions, EF Core SQL Server, JwtBearer, and the two cryptography packages
+  pinned above the vulnerable ones. OpenIddict 7.9.0 asks for it on .NET 10.
+- **The example host on `Stellaegis.Identity` 9.0.3**, replayed end to end — the native flow, the inventory with the
+  token and with its own credentials, the refresh, the sessions ended and their token refused.
+- **The README says what a native client written without a dependency takes**, § *A native client*. Its sentence on
+  versions now reads as it is: the packages started at the major version of Primitives and are numbered by what
+  changes in them, so 5.4.2 runs on Primitives 6.0.0.
+
+### Updating from 5.4.1
+
+Take the version: a host has nothing to change in what it asks of these packages. The version brings Primitives 6.0.0
+to the host, and two things follow from that, both described in the CHANGELOG of Primitives, § *Updating from 5.6.0*:
+
+1. **The other packages of the family the host references take a version that runs without what
+   `Stellaegis.Primitives.Data` 6.0.0 removed.** That section lists the least version of each; a host that composes
+   the issuer with `Stellaegis.Identity`, as the example does, takes Identity 9.0.2 or later. An older PostgreSQL or
+   SQL Server adapter restores on Primitives 6 and fails at its first query.
+2. **Code of the host that used Dapper without referencing it now references it itself**: Dapper came through the
+   store adapters, and no longer does.
+
 ## [5.4.1] — 2026-11-09
 
 On `Stellaegis.Primitives` 5.6.0, whose startup refuses a host it used to let through badly assembled.
