@@ -87,7 +87,11 @@ free (RFC 8252). Ending the session on `/account/sessions` revokes the
 tokens; the inventory refuses them at its next reading, within five seconds, with `Token.Revoked`. Changing the
 password on `/account/password` revokes every token of the person, the same way: the former refresh token is then
 refused with `invalid_grant`, and a new authorization goes through without the login page, the session having made
-the change.
+the change. A change the accounts publish no event for — an address set by an administrator, a second factor enrolled
+or disabled — refuses the next refresh too, with `invalid_grant`: the issuer kept the security stamp of the login in
+the refresh token, and the admission of `Stellaegis.Identity` 9.1.0 finds it no longer the account's. The access
+token already issued lives to its expiration, ten minutes; the password, which the host subscribes to, cuts it at
+once.
 
 ## The credentials of a service
 
