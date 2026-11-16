@@ -7,6 +7,44 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [5.5.0] — 2026-11-16
+
+What a token obtained does not outlive what proves its person: the issuer keeps the security stamp of the session
+and gives it to the host's admissions at every token request. On `Stellaegis.Primitives` 6.1.0.
+
+### Added
+
+- **The security stamp of the session kept for the token requests.** When the host's session carries
+  `SessionClaims.SecurityStamp` — the cookie of `Stellaegis.Identity` 9 does —, the authorization keeps it in the
+  code and the refresh token, which only the issuer reads; it is written in no access or identity token, and the
+  issuer reads no account. Measured on OpenIddict 7.9.0: a claim without destination travels in the code, a
+  reference whose payload is kept encrypted in the store, and in the refresh token, encrypted itself.
+- **The mark of a token request.** At the exchange of the code and at every refresh, the admissions are asked with a
+  copy of the token's principal marked `SessionClaims.TokenRequest`, its value the grant type —
+  `authorization_code` or `refresh_token` —, a claim of that name the token came with removed first. An admission
+  reads the account under the mark only, never at the door of every request. The mark is written in no token.
+
+With `Stellaegis.Identity` 9.1.0, whose admission holds the kept stamp against the account's, a password, an address
+or a second factor changed refuses the next refresh with `invalid_grant`, with no event: the account says it, and a
+lost event loses nothing. The README, § *Revocation and admission*.
+
+### Changed
+
+- `Stellaegis.Primitives` 6.1.0, for `SessionClaims`. The example on `Stellaegis.Identity` 9.1.0.
+
+### Updating from 5.4.3
+
+Nothing to write. The mark changes nothing for an admission that does not read it: a host on `Stellaegis.Identity`
+before 9.1.0, or on another scheme, keeps what it had.
+
+**On `Stellaegis.Identity` 9.1.0, each application goes back once through the authorization.** A code or a refresh
+token issued before 5.5.0 kept no stamp, and Identity refuses a token request that comes without one, as Identity 9
+closed the cookies without one: the next refresh answers `invalid_grant`, and the application goes back through the
+authorization, which an open session answers without a page.
+
+**The two subscriptions stay.** `UserBlocked` and `UserPasswordChanged` revoke the access tokens already issued at
+once; the stamp alone lets them live to their expiration, ten minutes unless set.
+
 ## [5.4.3] — 2026-11-16
 
 What a host that composes the issuer with `Stellaegis.Identity` subscribes to. The packages' code is unchanged.
