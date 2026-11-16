@@ -84,7 +84,10 @@ The access token carries `amr`, how the person proved who they are (RFC 8176): `
 The client `desktop` is declared *native*, and its redirect URI as `http://127.0.0.1/callback`: a loopback
 address, whose port the issuer ignores for a native client, so that the application listens on whatever port is
 free (RFC 8252). Ending the session on `/account/sessions` revokes the
-tokens; the inventory refuses them at its next reading, within five seconds, with `Token.Revoked`.
+tokens; the inventory refuses them at its next reading, within five seconds, with `Token.Revoked`. Changing the
+password on `/account/password` revokes every token of the person, the same way: the former refresh token is then
+refused with `invalid_grant`, and a new authorization goes through without the login page, the session having made
+the change.
 
 ## The credentials of a service
 

@@ -12,15 +12,16 @@ namespace Stellaegis.Issuer;
 /// <summary>
 /// Revokes what the issuer issued, at the store, and announces each access token revoked before its expiration
 /// as a <see cref="TokenRevokedEvent"/> — the store is the durable half, which the readings of
-/// <see cref="IRevokedTokensSource"/> (<c>Stellaegis.Issuer.Client</c>) re-sync; the event is the shortcut. The host calls it from its subscription
-/// to the <c>UserBlocked</c> event of the accounts, an administrator from the <c>tokens.revoke</c> route, the person
-/// from their sessions page; the caller owns the decision, this only performs it.
+/// <see cref="IRevokedTokensSource"/> (<c>Stellaegis.Issuer.Client</c>) re-sync; the event is the shortcut. The host calls it from its subscriptions
+/// to the <c>UserBlocked</c> and <c>UserPasswordChanged</c> events of the accounts, an administrator from the
+/// <c>tokens.revoke</c> route, the person from their sessions page; the caller owns the decision, this only performs it.
 /// </summary>
 public interface ITokenRevoker
 {
     /// <summary>
     /// Revokes every authorization and every token of <paramref name="subject"/> — a person's <c>sub</c>, a
-    /// client's id —: what blocking an account calls for. Returns how many tokens were revoked.
+    /// client's id —: what blocking an account, or changing its password, calls for. Returns how many tokens were
+    /// revoked.
     /// </summary>
     Task<int> RevokeSubjectAsync(string subject, CancellationToken cancellationToken = default);
 
