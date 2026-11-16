@@ -24,7 +24,7 @@ The library targets .NET 10 and is released under the MIT license.
 | `Stellaegis.Issuer.Client` | What a host that is not the issuer takes: the validation of the bearer tokens, the admission of the revoked tokens, the credentials a service speaks with. No OpenIddict | `Stellaegis.Primitives.AspNetCore`, JwtBearer |
 | `Stellaegis.Issuer.Server` | The sessions page a person ends their sessions on, as a Razor class library the host mounts beside the pages of the accounts | `Stellaegis.Issuer`, ASP.NET Core |
 
-The five packages share one version. They started at the major version of Stellaegis.Primitives, 5; 5.4.2 runs on
+The five packages share one version. They started at the major version of Stellaegis.Primitives, 5; 5.4.3 runs on
 Primitives 6.0.0. A host takes one store adapter, PostgreSQL or SQL Server.
 
 ## Two hosts, in full
@@ -58,7 +58,7 @@ builder.Services.AddAuthentication(o => o.DefaultScheme = "Sample")        // a 
         context.Request.Headers.Authorization.ToString().StartsWith("Bearer ") ? JwtBearerDefaults.AuthenticationScheme : IdentityCookie.Scheme);
 
 builder.Services.AddSingleton<IIdentityMailer, MyMailer>();
-builder.Services.AddSingleton<IEventPublisher, MyBus>();                   // UserBlocked → BlockedAccounts.Block, ITokenRevoker.RevokeSubjectAsync
+builder.Services.AddSingleton<IEventPublisher, MyBus>();                   // UserBlocked → BlockedAccounts.Block, ITokenRevoker.RevokeSubjectAsync; UserPasswordChanged → ITokenRevoker.RevokeSubjectAsync
 builder.Services.AddAuthorization(options => { /* one policy per operation of IdentityOperations.All and IssuerOperations.All */ });
 
 var app = builder.Build();
@@ -283,8 +283,27 @@ mapped several times in one host.
 `ITokenRevoker` revokes what the issuer issued — every token of a subject, a session (an authorization and its
 tokens), one token — at the store, and announces each access token revoked before its expiration as a
 `TokenRevokedEvent` on the `IEventPublisher` of Primitives: `TokenId`, `Subject`, `ExpiresAt`. The caller owns the
-decision: the host calls it from its subscription to the `UserBlocked` event of the accounts, an administrator from
-the `tokens.revoke` routes, the person from their sessions page. The module subscribes to nothing.
+decision: the host calls it from its subscriptions to the events of the accounts, an administrator from the
+`tokens.revoke` routes, the person from their sessions page. The module subscribes to nothing.
+
+**A host that composes the issuer with `Stellaegis.Identity` subscribes to two events**, and revokes every token
+of the subject on each:
+
+- `UserBlocked`, an account disabled or deleted;
+- `UserPasswordChanged`, a password changed, reset or removed. What was obtained on the former password is no longer
+  the person's: without this subscription, a refresh token taken with a stolen password keeps issuing tokens after
+  the reset, until it expires. The person's own applications go back through the authorization, which the session
+  that made the change answers without a page.
+
+```csharp
+case UserBlockedEvent blocked:
+    blockedAccounts.Block(blocked.UserUniqueId);
+    await revoker.RevokeSubjectAsync(blocked.UserUniqueId.ToString("N"), ct);
+    break;
+case UserPasswordChangedEvent changed:
+    await revoker.RevokeSubjectAsync(changed.UserUniqueId.ToString("N"), ct);
+    break;
+```
 
 A resource server refuses a revoked token at the door, before any route runs, with the admission of Primitives:
 `AddStellaegisIssuerAdmission()` keeps the revoked tokens in memory, read from `IRevokedTokensSource` when the host

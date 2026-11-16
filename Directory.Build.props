@@ -35,7 +35,7 @@
 
   <PropertyGroup>
     <!-- Versioning -->
-    <VersionPrefix>5.4.2</VersionPrefix>
+    <VersionPrefix>5.4.3</VersionPrefix>
     <VersionSuffix Condition="'$(Configuration)' == 'Debug'">dev</VersionSuffix>
   </PropertyGroup>
 

@@ -7,6 +7,35 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [5.4.3] — 2026-11-16
+
+What a host that composes the issuer with `Stellaegis.Identity` subscribes to. The packages' code is unchanged.
+
+### Fixed
+
+- **The README and the example said one subscription where a host needs two.** They revoked the tokens of a person
+  on `UserBlocked` alone. `UserPasswordChanged`, which Identity publishes when a password is changed, reset or
+  removed, calls for the same revocation: without it, a refresh token obtained with a stolen password keeps issuing
+  tokens after the reset, until it expires — thirty days unless set. The README, § *Revocation and admission*, now
+  names both subscriptions, and the example host makes both. Replayed on the example: before, the former access
+  token and refresh token still worked after a password change; now the access token is refused with
+  `Token.Revoked`, the refresh with `invalid_grant`, and the person's own application goes back through the
+  authorization without the login page.
+
+### Updating from 5.4.2
+
+**Check your bus.** A host that holds the issuer beside `Stellaegis.Identity`, and revokes on `UserBlocked` only,
+adds the second subscription:
+
+```csharp
+case UserPasswordChangedEvent changed:
+    await revoker.RevokeSubjectAsync(changed.UserUniqueId.ToString("N"), ct);
+    break;
+```
+
+Taking the version is not needed for that: the subscription is the host's code, and works with any version since
+5.0.0.
+
 ## [5.4.2] — 2026-11-16
 
 On `Stellaegis.Primitives` 6.0.0, whose `Stellaegis.Primitives.Data` no longer references Dapper, and on OpenIddict
