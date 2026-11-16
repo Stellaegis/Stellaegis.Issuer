@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.Extensions.Logging;
 using OpenIddict.Abstractions;
 using OpenIddict.Server;
+using Stellaegis.Primitives;
 using Stellaegis.Primitives.AspNetCore;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
@@ -43,10 +44,17 @@ internal sealed class ClientCredentialsTokenHandler : IOpenIddictServerHandler<O
 
 /// <summary>
 /// Asks the admissions of the host whether the subject of a code or a refresh token is still admitted before a
-/// new token is issued — an account blocked since, a session revoked. OpenIddict checks the token; it does not
-/// know the accounts, and the issuer does not either: the host's admissions do. A refusal answers
+/// new token is issued — an account blocked since, a session revoked, a security stamp changed. OpenIddict checks the
+/// token; it does not know the accounts, and the issuer does not either: the host's admissions do. A refusal answers
 /// <c>invalid_grant</c> with the reason. A <c>client_credentials</c> request carries no person and is untouched.
 /// </summary>
+/// <remarks>
+/// The admissions are given a copy of the token's principal marked <see cref="SessionClaims.TokenRequest"/>, its value
+/// the grant type, any claim of that name the principal came with removed first: an admission that reads the account
+/// does it under the mark only, never at the door of every request. The copy carries what the login kept,
+/// <see cref="SessionClaims.SecurityStamp"/> among it, or nothing of it for a session that had none. The mark is
+/// written in no token: the principal OpenIddict signs the new tokens with is not the copy.
+/// </remarks>
 internal sealed class RefreshAdmissionHandler(IActorAdmissions admissions, ILogger<RefreshAdmissionHandler> logger)
     : IOpenIddictServerHandler<OpenIddictServerEvents.HandleTokenRequestContext>
 {
@@ -64,12 +72,23 @@ internal sealed class RefreshAdmissionHandler(IActorAdmissions admissions, ILogg
         if (context.Principal is not { } principal)
             return;
 
-        var admitted = await admissions.AdmitAsync(principal, context.CancellationToken).ConfigureAwait(false);
+        var request = context.Request.IsAuthorizationCodeGrantType() ? SessionClaims.AuthorizationCodeRequest : SessionClaims.RefreshTokenRequest;
+        var admitted = await admissions.AdmitAsync(Marked(principal, request), context.CancellationToken).ConfigureAwait(false);
         if (admitted.IsFailure)
         {
             logger.LogWarning("Token exchange refused for subject {Subject}: {Code}", principal.GetClaim(Claims.Subject), admitted.Error!.Code);
             context.Reject(error: Errors.InvalidGrant, description: admitted.Error.Message);
         }
+    }
+
+    /// <summary>A copy of <paramref name="principal"/>, its identities cloned, that carries the mark of <paramref name="request"/> once.</summary>
+    internal static ClaimsPrincipal Marked(ClaimsPrincipal principal, string request)
+    {
+        var marked = new ClaimsPrincipal(principal.Identities.Select(identity => identity.Clone()));
+        marked.RemoveClaims(SessionClaims.TokenRequest);
+        var identity = marked.Identities.FirstOrDefault() ?? throw new InvalidOperationException("The principal of the token has no identity.");
+        identity.AddClaim(new Claim(SessionClaims.TokenRequest, request));
+        return marked;
     }
 }
 

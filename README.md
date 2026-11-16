@@ -24,8 +24,8 @@ The library targets .NET 10 and is released under the MIT license.
 | `Stellaegis.Issuer.Client` | What a host that is not the issuer takes: the validation of the bearer tokens, the admission of the revoked tokens, the credentials a service speaks with. No OpenIddict | `Stellaegis.Primitives.AspNetCore`, JwtBearer |
 | `Stellaegis.Issuer.Server` | The sessions page a person ends their sessions on, as a Razor class library the host mounts beside the pages of the accounts | `Stellaegis.Issuer`, ASP.NET Core |
 
-The five packages share one version. They started at the major version of Stellaegis.Primitives, 5; 5.4.3 runs on
-Primitives 6.0.0. A host takes one store adapter, PostgreSQL or SQL Server.
+The five packages share one version. They started at the major version of Stellaegis.Primitives, 5; 5.5.0 runs on
+Primitives 6.1.0. A host takes one store adapter, PostgreSQL or SQL Server.
 
 ## Two hosts, in full
 
@@ -171,8 +171,9 @@ no account: what it answers is what the login put in the token.
 `/connect/authorize` takes a person **the host has authenticated**: a stranger is challenged on the host's scheme
 — `AuthenticationScheme` in the options, or the host's default — and comes back signed in; a person signed in is
 first asked of every `IActorAdmission` registered — a blocked account is refused there, whatever the cookie says —,
-a refusal signs them out and sends the client `access_denied` with the reason. The refresh asks the admissions
-again, and answers `invalid_grant` when they refuse.
+a refusal signs them out and sends the client `access_denied` with the reason. The exchange of the code and every
+refresh ask the admissions again, with the security stamp the login kept, and answer `invalid_grant` when they
+refuse — § *Revocation and admission*.
 
 What the application asks of the login, OpenID Connect Core § 3.1.2.1, is followed:
 
@@ -286,14 +287,27 @@ tokens), one token — at the store, and announces each access token revoked bef
 decision: the host calls it from its subscriptions to the events of the accounts, an administrator from the
 `tokens.revoke` routes, the person from their sessions page. The module subscribes to nothing.
 
-**A host that composes the issuer with `Stellaegis.Identity` subscribes to two events**, and revokes every token
-of the subject on each:
+**A token request is held against the security stamp of the session.** When the host's session carries one —
+`SessionClaims.SecurityStamp` of Primitives, which the cookie of `Stellaegis.Identity` 9 carries —, the authorization
+keeps it in the code and the refresh token, which only the issuer reads, and writes it in no access or identity
+token. At the exchange of the code and at every refresh, the admissions are asked with a copy of the token's
+principal marked `SessionClaims.TokenRequest`, its value the grant type, `authorization_code` or `refresh_token`; a
+claim of that name the token came with is removed first, and the mark is written in no token. The admission of
+`Stellaegis.Identity` 9.1.0 sees the mark, reads the account, and refuses a stamp changed since the login — a
+password, an address, a second factor —, or a token that kept none: the request answers `invalid_grant`, and the
+application goes back through the authorization, which an open session answers without a page. The account says it,
+no event is needed, and a lost event loses nothing. Without the mark — at the door, at every request — no account is
+read. The issuer only carries the value: what it means is the admission's. An access token already issued lives to
+its expiration, ten minutes unless set, unless an event revokes it.
+
+**A host that composes the issuer with `Stellaegis.Identity` subscribes to two events** as well, and revokes every
+token of the subject on each — the access tokens already issued are refused at once, instead of at their expiration:
 
 - `UserBlocked`, an account disabled or deleted;
 - `UserPasswordChanged`, a password changed, reset or removed. What was obtained on the former password is no longer
-  the person's: without this subscription, a refresh token taken with a stolen password keeps issuing tokens after
-  the reset, until it expires. The person's own applications go back through the authorization, which the session
-  that made the change answers without a page.
+  the person's: the stamp refuses its refresh tokens already, the subscription refuses its access tokens too. The
+  person's own applications go back through the authorization, which the session that made the change answers
+  without a page.
 
 ```csharp
 case UserBlockedEvent blocked:

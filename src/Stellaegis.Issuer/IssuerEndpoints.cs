@@ -33,7 +33,9 @@ namespace Stellaegis.Issuer;
 /// is signed by OpenIddict with the claims <c>sub</c>, <c>email</c> and <c>name</c>, <c>amr</c>, and the profile the
 /// session carries — <c>locale</c>, <c>zoneinfo</c>, <c>picture</c> (OpenID Connect Core § 5.1) —, the scopes
 /// requested, and as audiences the resources of those scopes — a scope is the name of a module. A refresh keeps the
-/// claims of the login: a language changed reaches the tokens at the next one.
+/// claims of the login: a language changed reaches the tokens at the next one. The security stamp of the session,
+/// <c>SessionClaims.SecurityStamp</c>, when the session carries one, is kept in the code and the refresh token for the
+/// admissions of every token request, and written in no token a client or a service reads.
 /// </para>
 /// <para>
 /// At <c>/connect/userinfo</c>, the claims of the access token presented: <c>sub</c>, <c>email</c> under the scope
@@ -166,6 +168,13 @@ public static class IssuerEndpoints
             if (user.FindFirst(type)?.Value is { Length: > 0 } value)
                 identity.SetClaim(type, value);
         }
+
+        // The security stamp of the session, when the host's scheme carries one — the cookie of Stellaegis.Identity
+        // does. Destinations gives it none: it travels in the code and the refresh token, which only the issuer reads,
+        // and in no token a client or a service reads. At every token request the host's admissions hold it against the
+        // account's, RefreshAdmissionHandler; the issuer reads no account and only carries the value.
+        if (user.FindFirst(SessionClaims.SecurityStamp)?.Value is { Length: > 0 } stamp)
+            identity.SetClaim(SessionClaims.SecurityStamp, stamp);
 
         // How the person proved who they are, as the session says (RFC 8176): a decision then asks whether a second
         // factor was used for this session, not whether the account has one. A refresh keeps those of the login; the
