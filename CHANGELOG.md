@@ -7,6 +7,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The README and the example subscribe to `UserSecurityStampRenewed`** of `Stellaegis.Identity` 9.2.0 rather than
+  to `UserPasswordChanged`: published at every renewal of the stamp, it covers the password, the address, the second
+  factor and the block, and cuts the access tokens already issued at once. The example on `Stellaegis.Identity` 9.2.0.
+  The packages' code is unchanged; a host on Identity before 9.2.0 keeps its subscription to `UserPasswordChanged`.
+
 ## [5.5.0] — 2026-11-16
 
 What a token obtained does not outlive what proves its person: the issuer keeps the security stamp of the session

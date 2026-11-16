@@ -84,14 +84,14 @@ The access token carries `amr`, how the person proved who they are (RFC 8176): `
 The client `desktop` is declared *native*, and its redirect URI as `http://127.0.0.1/callback`: a loopback
 address, whose port the issuer ignores for a native client, so that the application listens on whatever port is
 free (RFC 8252). Ending the session on `/account/sessions` revokes the
-tokens; the inventory refuses them at its next reading, within five seconds, with `Token.Revoked`. Changing the
-password on `/account/password` revokes every token of the person, the same way: the former refresh token is then
-refused with `invalid_grant`, and a new authorization goes through without the login page, the session having made
-the change. A change the accounts publish no event for — an address set by an administrator, a second factor enrolled
-or disabled — refuses the next refresh too, with `invalid_grant`: the issuer kept the security stamp of the login in
-the refresh token, and the admission of `Stellaegis.Identity` 9.1.0 finds it no longer the account's. The access
-token already issued lives to its expiration, ten minutes; the password, which the host subscribes to, cuts it at
-once.
+tokens; the inventory refuses them at its next reading, within five seconds, with `Token.Revoked`. Whatever renews
+the security stamp of the account — the password changed on `/account/password`, an address set by an administrator,
+a second factor enrolled or disabled — revokes every token of the person the same way, on
+`UserSecurityStampRenewed` (`Stellaegis.Identity` 9.2.0): the former access token is refused with `Token.Revoked`,
+the former refresh token with `invalid_grant`, and a new authorization goes through without the login page, the
+session having made the change. Were the event lost, the refresh would be refused all the same — the issuer kept the
+stamp of the login in the refresh token, and the admission of the accounts finds it no longer the account's —, and
+the access token would live to its expiration, ten minutes.
 
 ## The credentials of a service
 

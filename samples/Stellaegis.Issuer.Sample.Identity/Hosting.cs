@@ -79,10 +79,12 @@ public sealed class LoggingMailer(ILogger<LoggingMailer> logger) : IIdentityMail
 /// <summary>
 /// The bus of the example: a single process, so an event is handed to its subscribers straight away. A block
 /// applies to the admission without waiting for its next reading, and revokes every token the issuer gave the
-/// blocked person; an unblock lifts the admission. A password changed, reset or removed revokes every token the
-/// issuer gave the person too: what was obtained on the former password is no longer theirs, and their own
-/// applications go back through the authorization, which their session answers without a page. These are the two
-/// subscriptions a host that holds both asks of its bus. A revoked token is already refused by this process (the
+/// blocked person; an unblock lifts the admission. Whatever renews the security stamp of an account — a password, an
+/// address, a second factor, a block — revokes every token the issuer gave the person too: the refresh tokens are
+/// refused by the stamp already, and the access tokens are cut at once rather than at their expiration. The
+/// person's own applications go back through the authorization, which their session answers without a page. These
+/// are the two subscriptions a host that holds both asks of its bus; a block revokes twice, and the second finds
+/// nothing left. A revoked token is already refused by this process (the
 /// issuer told its own admission) and is logged for the services apart, which read the revoked tokens from the
 /// issuer's route. A host with several processes registers the bus of <c>Stellaegis.Backplane</c> instead, and
 /// subscribes the same way.
@@ -105,12 +107,12 @@ public sealed class SampleEventPublisher(BlockedAccounts accounts, IServiceScope
             case UserUnblockedEvent unblocked:
                 accounts.Unblock(unblocked.UserUniqueId);
                 break;
-            case UserPasswordChangedEvent changed:
+            case UserSecurityStampRenewedEvent renewed:
                 using (var scope = scopes.CreateScope())
                 {
                     var revoked = await scope.ServiceProvider.GetRequiredService<ITokenRevoker>()
-                        .RevokeSubjectAsync(changed.UserUniqueId.ToString("N"), cancellationToken);
-                    logger.LogInformation("Password of {UserUniqueId} {Reason}: {Count} token(s) revoked", changed.UserUniqueId, changed.Reason, revoked);
+                        .RevokeSubjectAsync(renewed.UserUniqueId.ToString("N"), cancellationToken);
+                    logger.LogInformation("Security stamp of {UserUniqueId} renewed ({Reason}): {Count} token(s) revoked", renewed.UserUniqueId, renewed.Reason, revoked);
                 }
                 break;
         }

@@ -304,20 +304,23 @@ its expiration, ten minutes unless set, unless an event revokes it.
 token of the subject on each — the access tokens already issued are refused at once, instead of at their expiration:
 
 - `UserBlocked`, an account disabled or deleted;
-- `UserPasswordChanged`, a password changed, reset or removed. What was obtained on the former password is no longer
-  the person's: the stamp refuses its refresh tokens already, the subscription refuses its access tokens too. The
-  person's own applications go back through the authorization, which the session that made the change answers
-  without a page.
+- `UserSecurityStampRenewed` (`Stellaegis.Identity` 9.2.0), whatever renewed the stamp of the account — a password
+  changed, reset or removed, an address changed, a second factor enrolled, enabled, disabled or reset, a block. The
+  stamp refuses the refresh tokens already; the subscription refuses the access tokens too. The person's own
+  applications go back through the authorization, which their open session answers without a page.
 
 ```csharp
 case UserBlockedEvent blocked:
     blockedAccounts.Block(blocked.UserUniqueId);
     await revoker.RevokeSubjectAsync(blocked.UserUniqueId.ToString("N"), ct);
     break;
-case UserPasswordChangedEvent changed:
-    await revoker.RevokeSubjectAsync(changed.UserUniqueId.ToString("N"), ct);
+case UserSecurityStampRenewedEvent renewed:
+    await revoker.RevokeSubjectAsync(renewed.UserUniqueId.ToString("N"), ct);
     break;
 ```
+
+A block publishes both, and the second revocation finds nothing left. On `Stellaegis.Identity` before 9.2.0, which
+publishes no such event, the second subscription is to `UserPasswordChanged`: a password changed, reset or removed.
 
 A resource server refuses a revoked token at the door, before any route runs, with the admission of Primitives:
 `AddStellaegisIssuerAdmission()` keeps the revoked tokens in memory, read from `IRevokedTokensSource` when the host
